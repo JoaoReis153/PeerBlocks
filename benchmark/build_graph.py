@@ -1,5 +1,5 @@
 """
-build_graph.py — Visualise TorrentFileSharing benchmark results.
+build_graph.py — Visualise PeerBlocks benchmark results.
 
 Reads benchmark_results.csv (produced by Tests.Benchmark) and writes
 benchmark_graph.png with two subplots:

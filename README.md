@@ -1,4 +1,4 @@
-# TorrentFileSharing
+# PeerBlocks
 
 [![CI](https://github.com/JoaoReis153/TorrentFileSharing/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JoaoReis153/TorrentFileSharing/actions/workflows/ci.yml)
 
@@ -40,7 +40,7 @@ Files are identified by their SHA-256 hash, which prevents duplicate downloads a
 ## Project Layout
 
 ```
-TorrentFileSharing/
+PeerBlocks/
 ├── Code/
 │   ├── src/
 │   │   ├── Core/

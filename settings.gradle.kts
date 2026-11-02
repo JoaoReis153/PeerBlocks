@@ -1,1 +1,1 @@
-rootProject.name = "TorrentFileSharing"
+rootProject.name = "PeerBlocks"
