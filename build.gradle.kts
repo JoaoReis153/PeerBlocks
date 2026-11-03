@@ -58,19 +58,10 @@ tasks.named<JavaExec>("run") {
     workingDir = rootDir
 }
 
-// Copies the seed files in files/dl{id}/ to the nodes' working folders (nodes/node-{id}/)
-val seedNodes by tasks.registering(Copy::class) {
-    from("files") { include("dl*/**") }
-    into("nodes")
-    eachFile { path = path.replaceFirst(Regex("^dl"), "node-") }
-    includeEmptyDirs = false
-}
-
-// ./gradlew scenarios: starts several nodes and runs a scripted scenario
+// ./gradlew scenarios: starts several nodes (the first shares generated sample files)
 tasks.register<JavaExec>("scenarios") {
     group = "application"
     description = "Runs a multi-node demo scenario (asks for node ids and a mode)"
-    dependsOn(seedNodes)
     classpath = tools.runtimeClasspath
     mainClass = "dev.joaoreis.peerblocks.tools.Scenarios"
     standardInput = System.`in`

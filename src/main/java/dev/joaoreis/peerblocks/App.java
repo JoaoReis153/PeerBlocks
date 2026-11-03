@@ -8,7 +8,6 @@ import java.util.Scanner;
 
 public class App {
 
-    private static final String DEFAULT_FILE_STRUCTURE = "files";
     private static final String NODE_FILES_BASE = Config.WORK_FOLDER;
     private static int id = -1;
 
@@ -47,7 +46,7 @@ public class App {
             }
         }
 
-        createDefaultFileStructure(id);
+        resetWorkingFolder(id);
 
         Runtime.getRuntime()
                 .addShutdownHook(
@@ -102,57 +101,19 @@ public class App {
         }
     }
 
-    // Method to copy a directory recursively
-    private static void copyDirectory(File source, File destination) throws IOException {
-        if (source.isDirectory()) {
-            if (!destination.exists()) {
-                destination.mkdirs();
-            }
-            String[] files = source.list();
-            if (files != null) {
-                for (String file : files) {
-                    copyDirectory(new File(source, file), new File(destination, file));
-                }
-            }
-        } else {
-            java.nio.file.Files.copy(source.toPath(), destination.toPath());
+    // Starts the node with an empty working folder
+    private static void resetWorkingFolder(int arg) {
+        File workingFolder = new File(NODE_FILES_BASE + arg);
+        try {
+            deleteDirectory(workingFolder);
+        } catch (IOException e) {
+            System.err.println("Failed to remove the directory: " + workingFolder);
+            System.exit(1);
         }
-    }
-
-    private static void createDefaultFileStructure(int arg) {
-        String dirToRemove = NODE_FILES_BASE + arg;
-        File removeDir = new File(dirToRemove);
-        if (removeDir.exists() && removeDir.isDirectory()) {
-            try {
-                deleteDirectory(removeDir);
-            } catch (IOException e) {
-                System.err.println("Failed to remove the directory: " + dirToRemove);
-                System.exit(1);
-            }
-        }
-
-        String dirToCreate = DEFAULT_FILE_STRUCTURE + "/dl" + arg;
-        File createDir = new File(dirToCreate);
-        if (createDir.exists() && createDir.isDirectory()) {
-            try {
-                copyDirectory(createDir, new File(NODE_FILES_BASE + arg));
-            } catch (IOException e) {
-                System.err.println("Failed to copy files for argument: " + arg);
-                System.exit(1);
-            }
-        } else {
-            System.out.println("Argument folder not found in default structure: " + arg);
-
-            // Create the directory in the PROJECT_DIR if it doesn't exist
-            File newDir = new File(NODE_FILES_BASE + arg);
-            if (!newDir.exists()) {
-                boolean created = newDir.mkdirs(); // Create the directory
-                if (!created) {
-                    System.err.println(
-                            "Failed to create the directory: " + newDir.getAbsolutePath());
-                    System.exit(1);
-                }
-            }
+        if (!workingFolder.mkdirs()) {
+            System.err.println(
+                    "Failed to create the directory: " + workingFolder.getAbsolutePath());
+            System.exit(1);
         }
     }
 }

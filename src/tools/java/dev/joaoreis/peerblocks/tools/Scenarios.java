@@ -1,13 +1,18 @@
 package dev.joaoreis.peerblocks.tools;
 
+import dev.joaoreis.peerblocks.core.Config;
 import dev.joaoreis.peerblocks.core.Node;
 import dev.joaoreis.peerblocks.gui.GUI;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
 
@@ -15,6 +20,9 @@ public class Scenarios {
 
     private static final String DEFAULT_BROADCAST_QUERY = "";
     private static final long DEFAULT_DELAY_BEFORE_DOWNLOAD_MS = 1000L;
+    // The first node shares sample-file-1 (1 MB), sample-file-2 (2 MB), ...
+    private static final int SAMPLE_FILE_COUNT = 3;
+    private static final int SAMPLE_FILE_SIZE_BYTES = 1024 * 1024;
 
     private final List<Integer> inputs;
     private final int mode;
@@ -236,8 +244,11 @@ public class Scenarios {
             return;
         }
 
+        // Every node starts empty, except the first one, which shares generated sample files
+        int seederId = inputs.get(0);
         for (int id : inputs) {
             try {
+                prepareWorkingFolder(id, id == seederId);
                 GUI gui = new GUI(id, true);
                 guiList.add(gui);
                 gui.open();
@@ -250,6 +261,31 @@ public class Scenarios {
                 e.printStackTrace();
             }
         }
+    }
+
+    /*
+     * Gives the node an empty working folder, filled with random sample files when it is the seeder.
+     * Nothing is read from the repository, so there are no media files to commit.
+     */
+    private static void prepareWorkingFolder(int id, boolean withSampleFiles) throws IOException {
+        File folder = new File(Config.WORK_FOLDER + id);
+        deleteRecursively(folder);
+        Files.createDirectories(folder.toPath());
+        if (!withSampleFiles) return;
+
+        for (int i = 1; i <= SAMPLE_FILE_COUNT; i++) {
+            byte[] content = new byte[SAMPLE_FILE_SIZE_BYTES * i];
+            new Random(i).nextBytes(content);
+            Files.write(new File(folder, "sample-file-" + i + ".bin").toPath(), content);
+        }
+        System.out.println(
+                "Node " + id + " shares " + SAMPLE_FILE_COUNT + " generated sample files");
+    }
+
+    private static void deleteRecursively(File file) {
+        File[] children = file.listFiles();
+        if (children != null) for (File child : children) deleteRecursively(child);
+        file.delete();
     }
 
     /**
