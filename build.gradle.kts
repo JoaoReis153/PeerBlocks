@@ -21,7 +21,7 @@ java {
 
 spotless {
     java {
-        target("Code/src/**/*.java", "Code/test/**/*.java")
+        target("src/**/*.java")
         googleJavaFormat().aosp()
         removeUnusedImports()
         trimTrailingWhitespace()
@@ -29,17 +29,20 @@ spotless {
     }
 }
 
-sourceSets.main {
-    java.setSrcDirs(listOf("Code/src"))
+// Demo and benchmark launchers. They use the app but are not shipped with it.
+val tools: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
 }
 
-sourceSets.test {
-    java.setSrcDirs(listOf("Code/test"))
+// Make sure the launchers still compile whenever the project is checked (and in CI)
+tasks.check {
+    dependsOn(tools.classesTaskName)
 }
 
 tasks.test {
     useJUnitPlatform()
-    workingDir = rootDir // nodes use the relative path Code/files/dl{id}
+    workingDir = rootDir // nodes use the relative path nodes/node-{id}
     testLogging {
         events("failed", "skipped")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -47,10 +50,38 @@ tasks.test {
 }
 
 application {
-    mainClass = "Tests.Main"
+    mainClass = "dev.joaoreis.peerblocks.App"
 }
 
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
+    workingDir = rootDir
+}
+
+// Copies the seed files in files/dl{id}/ to the nodes' working folders (nodes/node-{id}/)
+val seedNodes by tasks.registering(Copy::class) {
+    from("files") { include("dl*/**") }
+    into("nodes")
+    eachFile { path = path.replaceFirst(Regex("^dl"), "node-") }
+    includeEmptyDirs = false
+}
+
+// ./gradlew scenarios: starts several nodes and runs a scripted scenario
+tasks.register<JavaExec>("scenarios") {
+    group = "application"
+    description = "Runs a multi-node demo scenario (asks for node ids and a mode)"
+    dependsOn(seedNodes)
+    classpath = tools.runtimeClasspath
+    mainClass = "dev.joaoreis.peerblocks.tools.Scenarios"
+    standardInput = System.`in`
+    workingDir = rootDir
+}
+
+// ./gradlew benchmark --args="[maxSeeds] [iterations] [fileSizeBytes] [outputCsv]"
+tasks.register<JavaExec>("benchmark") {
+    group = "application"
+    description = "Measures download speed as the number of seeders grows"
+    classpath = tools.runtimeClasspath
+    mainClass = "dev.joaoreis.peerblocks.tools.Benchmark"
     workingDir = rootDir
 }

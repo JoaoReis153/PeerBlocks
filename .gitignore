@@ -54,3 +54,6 @@ ajcore.*
 
 # Ignore the run_project.sh-e file
 run_project.sh-e
+
+# Node working folders created at runtime
+/nodes/

@@ -1,7 +1,7 @@
 """
 build_graph.py — Visualise PeerBlocks benchmark results.
 
-Reads benchmark_results.csv (produced by Tests.Benchmark) and writes
+Reads benchmark_results.csv (produced by ./gradlew benchmark) and writes
 benchmark_graph.png with two subplots:
 
   Top   : Average throughput (MB/s) vs number of seeders
