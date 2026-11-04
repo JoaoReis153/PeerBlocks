@@ -3,6 +3,7 @@ package dev.joaoreis.peerblocks.tools;
 import dev.joaoreis.peerblocks.core.Config;
 import dev.joaoreis.peerblocks.core.Node;
 import dev.joaoreis.peerblocks.core.NodeListener;
+import dev.joaoreis.peerblocks.core.Utils;
 import dev.joaoreis.peerblocks.filesearch.FileSearchResult;
 import dev.joaoreis.peerblocks.gui.GUI;
 import java.io.*;
@@ -10,7 +11,16 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
+/**
+ * Measures download speed against the number of seeders. Transfer and verification are timed apart.
+ */
 public class Benchmark {
+
+    record Timing(long transferMs, long verifyMs) {
+        long totalMs() {
+            return transferMs + verifyMs;
+        }
+    }
 
     // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -66,9 +76,17 @@ public class Benchmark {
             System.exit(1);
         }
 
+        // Use loopback by default, so a VPN or Wi-Fi interface doesn't cap the speed
+        System.setProperty(
+                Utils.HOST_PROPERTY, System.getProperty(Utils.HOST_PROPERTY, "127.0.0.1"));
+
         System.out.printf(
-                "Benchmark  maxSeeds=%d  iterations=%d  fileSize=%,d bytes  csv=%s%n",
-                maxSeeds, iterations, fileSizeBytes, csvPath);
+                "Benchmark  maxSeeds=%d  iterations=%d  fileSize=%,d bytes  host=%s  csv=%s%n",
+                maxSeeds,
+                iterations,
+                fileSizeBytes,
+                System.getProperty(Utils.HOST_PROPERTY),
+                csvPath);
 
         new Benchmark(maxSeeds, iterations, fileSizeBytes, csvPath).run();
         System.exit(0); // stop lingering non-daemon node threads
@@ -83,56 +101,89 @@ public class Benchmark {
         List<String[]> rows = new ArrayList<>();
         rows.add(
                 new String[] {
-                    "seeds", "iteration", "file_size_bytes", "duration_ms", "throughput_mb_per_sec"
+                    "seeds",
+                    "iteration",
+                    "file_size_bytes",
+                    "transfer_ms",
+                    "verify_ms",
+                    "total_ms",
+                    "transfer_mb_per_sec",
+                    "total_mb_per_sec"
                 });
 
-        // Per-seed aggregates for the summary table
-        Map<Integer, List<Long>> durationsPerSeed = new LinkedHashMap<>();
+        // Per-seed results for the summary table
+        Map<Integer, List<Timing>> timingsPerSeed = new LinkedHashMap<>();
+
+        // Warm-up run, not recorded
+        System.out.print("Warm-up run (not recorded)  ");
+        Timing warmUp = runSingleBenchmark(1, fileContent);
+        System.out.println(warmUp == null ? "failed" : "done");
 
         for (int seeds = 1; seeds <= maxSeeds; seeds++) {
             System.out.printf("%n=== %d seed(s) ===%n", seeds);
-            List<Long> durations = new ArrayList<>();
+            List<Timing> timings = new ArrayList<>();
 
             for (int iter = 1; iter <= iterations; iter++) {
                 System.out.printf("  [%d/%d]  ", iter, iterations);
-                String durationStr, throughputStr;
+                String[] timingColumns;
 
                 try {
-                    long duration = runSingleBenchmark(seeds, fileContent);
-                    if (duration > 0) {
-                        double mbps = (fileSizeBytes / 1_048_576.0) / (duration / 1_000.0);
-                        durationStr = String.valueOf(duration);
-                        throughputStr = String.format("%.4f", mbps);
-                        System.out.printf("%d ms  (%.2f MB/s)%n", duration, mbps);
-                        durations.add(duration);
+                    Timing timing = runSingleBenchmark(seeds, fileContent);
+                    if (timing != null) {
+                        timingColumns = timingColumns(timing);
+                        System.out.printf(
+                                "transfer %d ms (%.2f MB/s)  +  verify %d ms  =  %d ms%n",
+                                timing.transferMs(),
+                                megabytesPerSecond(timing.transferMs()),
+                                timing.verifyMs(),
+                                timing.totalMs());
+                        timings.add(timing);
                     } else {
-                        durationStr = throughputStr = "TIMEOUT";
+                        timingColumns = filled("TIMEOUT");
                         System.out.println("TIMEOUT");
                     }
                 } catch (Exception e) {
-                    durationStr = throughputStr = "ERROR";
+                    timingColumns = filled("ERROR");
                     System.out.println("ERROR: " + e.getMessage());
                 }
 
-                rows.add(
-                        new String[] {
-                            String.valueOf(seeds),
-                            String.valueOf(iter),
-                            String.valueOf(fileSizeBytes),
-                            durationStr,
-                            throughputStr
-                        });
+                List<String> row = new ArrayList<>();
+                row.add(String.valueOf(seeds));
+                row.add(String.valueOf(iter));
+                row.add(String.valueOf(fileSizeBytes));
+                row.addAll(Arrays.asList(timingColumns));
+                rows.add(row.toArray(new String[0]));
 
                 Thread.sleep(300); // brief cooldown between runs
             }
 
-            durationsPerSeed.put(seeds, durations);
+            timingsPerSeed.put(seeds, timings);
         }
 
         writeCsv(rows, csvOutputPath);
         System.out.println("\nResults written to: " + new File(csvOutputPath).getAbsolutePath());
 
-        printSummaryTable(durationsPerSeed);
+        printSummaryTable(timingsPerSeed);
+    }
+
+    private double megabytesPerSecond(long durationMs) {
+        return (fileSizeBytes / 1_048_576.0) / (Math.max(1, durationMs) / 1_000.0);
+    }
+
+    private String[] timingColumns(Timing t) {
+        return new String[] {
+            String.valueOf(t.transferMs()),
+            String.valueOf(t.verifyMs()),
+            String.valueOf(t.totalMs()),
+            String.format(Locale.ROOT, "%.4f", megabytesPerSecond(t.transferMs())),
+            String.format(Locale.ROOT, "%.4f", megabytesPerSecond(t.totalMs()))
+        };
+    }
+
+    private static String[] filled(String value) {
+        String[] columns = new String[5];
+        Arrays.fill(columns, value);
+        return columns;
     }
 
     // ── Single benchmark run ───────────────────────────────────────────────────
@@ -140,12 +191,11 @@ public class Benchmark {
     /**
      * Spins up {@code seedCount} seeder nodes pre-loaded with the test file, plus one downloader
      * node with a {@link BenchmarkNodeListener}. Connects them, broadcasts a search, waits for
-     * results, triggers the download, and returns the duration in milliseconds as measured inside
-     * {@link dev.joaoreis.peerblocks.services.DownloadTasksManager}.
+     * results and triggers the download.
      *
-     * @return download duration in ms, or -1 on timeout / failure
+     * @return the transfer and verification times, or null on timeout / failure
      */
-    private long runSingleBenchmark(int seedCount, byte[] fileContent) throws Exception {
+    private Timing runSingleBenchmark(int seedCount, byte[] fileContent) throws Exception {
 
         // Allocate unique IDs for this run (avoids ServerSocket port conflicts
         // with still-running nodes from previous iterations)
@@ -190,17 +240,17 @@ public class Benchmark {
         // 5 — Trigger download with the results we collected
         if (benchListener.hasNoResults()) {
             System.out.print("[no search results — skipped]  ");
-            return -1;
+            return null;
         }
         benchListener.triggerDownload();
 
-        // 6 — Wait; duration is measured precisely inside DownloadTasksManager
-        long duration = benchListener.awaitCompletion(DOWNLOAD_TIMEOUT_MS);
+        // 6 — Wait for the download to finish
+        Timing timing = benchListener.awaitCompletion(DOWNLOAD_TIMEOUT_MS);
 
         // 7 — Delete the downloaded file so the next run starts clean
         new File(Config.WORK_FOLDER + downloaderId + File.separator + BENCH_FILE_NAME).delete();
 
-        return duration;
+        return timing;
     }
 
     // ── BenchmarkNodeListener ──────────────────────────────────────────────────
@@ -212,8 +262,8 @@ public class Benchmark {
      *   <li>auto-accepts all incoming connection requests,
      *   <li>accumulates {@link FileSearchResult} objects from seeder replies,
      *   <li>groups them by hash and calls {@code node.downloadFiles()} on demand,
-     *   <li>records the precise duration reported by DownloadTasksManager and releases the waiting
-     *       thread via a {@link CountDownLatch}.
+     *   <li>records the transfer and verification times and releases the waiting thread via a
+     *       {@link CountDownLatch}.
      * </ul>
      */
     static class BenchmarkNodeListener implements NodeListener {
@@ -222,7 +272,10 @@ public class Benchmark {
         private final List<FileSearchResult> collected =
                 Collections.synchronizedList(new ArrayList<>());
         private final CountDownLatch latch = new CountDownLatch(1);
-        private volatile long durationMs = -1;
+        private volatile long totalMs = -1;
+        private volatile long startNanos;
+        private volatile long transferEndNanos;
+        private volatile int totalBlocks;
 
         void setNode(Node node) {
             this.node = node;
@@ -245,9 +298,15 @@ public class Benchmark {
             node.downloadFiles(new ArrayList<>(byHash.values()));
         }
 
-        long awaitCompletion(long timeoutMs) throws InterruptedException {
+        /** Returns null if the download failed or timed out. */
+        Timing awaitCompletion(long timeoutMs) throws InterruptedException {
             latch.await(timeoutMs, TimeUnit.MILLISECONDS);
-            return durationMs;
+            if (totalMs <= 0 || transferEndNanos == 0) return null;
+
+            long transferMs = (transferEndNanos - startNanos) / 1_000_000;
+            // What is left after the last block is the verification
+            long verifyMs = Math.max(0, totalMs - transferMs);
+            return new Timing(transferMs, verifyMs);
         }
 
         // NodeListener ──────────────────────────────────────────────────────────
@@ -266,10 +325,17 @@ public class Benchmark {
         public void reloadListModel() {}
 
         @Override
-        public void startDownloadProgress(byte[] hash, String fileName, int totalBlocks) {}
+        public void startDownloadProgress(byte[] hash, String fileName, int totalBlocks) {
+            this.totalBlocks = totalBlocks;
+            this.startNanos = System.nanoTime();
+        }
 
         @Override
-        public void updateDownloadProgress(byte[] hash, int completedBlocks) {}
+        public void updateDownloadProgress(byte[] hash, int completedBlocks) {
+            if (completedBlocks == totalBlocks && transferEndNanos == 0) {
+                transferEndNanos = System.nanoTime();
+            }
+        }
 
         @Override
         public void finishDownloadProgress(byte[] hash) {
@@ -280,7 +346,7 @@ public class Benchmark {
         @Override
         public void completeDownloadProgress(
                 byte[] hash, long durationInMs, Map<String, Integer> nodesNBlocks) {
-            this.durationMs = durationInMs;
+            this.totalMs = durationInMs;
             latch.countDown();
         }
     }
@@ -312,23 +378,30 @@ public class Benchmark {
         }
     }
 
-    private static void printSummaryTable(Map<Integer, List<Long>> durationsPerSeed) {
+    private void printSummaryTable(Map<Integer, List<Timing>> timingsPerSeed) {
         System.out.println();
-        System.out.println("┌────────┬──────────────┬──────────────┬──────────────┐");
-        System.out.println("│ Seeds  │   Avg (ms)   │   Min (ms)   │   Max (ms)   │");
-        System.out.println("├────────┼──────────────┼──────────────┼──────────────┤");
-        for (Map.Entry<Integer, List<Long>> e : durationsPerSeed.entrySet()) {
-            List<Long> d = e.getValue();
-            if (d.isEmpty()) {
+        System.out.println("┌───────┬───────────────────────────┬───────────────┬─────────────┐");
+        System.out.println("│ Seeds │  Transfer avg (min–max)   │ Transfer MB/s │  Verify avg │");
+        System.out.println("├───────┼───────────────────────────┼───────────────┼─────────────┤");
+        for (Map.Entry<Integer, List<Timing>> e : timingsPerSeed.entrySet()) {
+            List<Timing> t = e.getValue();
+            if (t.isEmpty()) {
                 System.out.printf(
-                        "│ %-6d │ %12s │ %12s │ %12s │%n", e.getKey(), "n/a", "n/a", "n/a");
-            } else {
-                long min = d.stream().mapToLong(Long::longValue).min().getAsLong();
-                long max = d.stream().mapToLong(Long::longValue).max().getAsLong();
-                double avg = d.stream().mapToLong(Long::longValue).average().getAsDouble();
-                System.out.printf("│ %-6d │ %12.1f │ %12d │ %12d │%n", e.getKey(), avg, min, max);
+                        "│ %-5d │ %25s │ %13s │ %11s │%n", e.getKey(), "n/a", "n/a", "n/a");
+                continue;
             }
+            LongSummaryStatistics transfer =
+                    t.stream().mapToLong(Timing::transferMs).summaryStatistics();
+            double verifyAvg = t.stream().mapToLong(Timing::verifyMs).average().getAsDouble();
+            System.out.printf(
+                    "│ %-5d │ %25s │ %13.1f │ %8.0f ms │%n",
+                    e.getKey(),
+                    String.format(
+                            "%.0f ms (%d–%d)",
+                            transfer.getAverage(), transfer.getMin(), transfer.getMax()),
+                    megabytesPerSecond(Math.round(transfer.getAverage())),
+                    verifyAvg);
         }
-        System.out.println("└────────┴──────────────┴──────────────┴──────────────┘");
+        System.out.println("└───────┴───────────────────────────┴───────────────┴─────────────┘");
     }
 }

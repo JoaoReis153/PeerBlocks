@@ -44,8 +44,15 @@ public class Utils {
         return id >= Config.MIN_NODE_ID && id <= Config.MAX_NODE_ID;
     }
 
+    // Set this system property to fix the node address, e.g. -Dpeerblocks.host=127.0.0.1
+    public static final String HOST_PROPERTY = "peerblocks.host";
+
     // Returns the local IP address of the computer that the program is running on
     public static InetAddress getLocalIPAddress() throws Exception {
+        String configuredHost = System.getProperty(HOST_PROPERTY);
+        if (configuredHost != null && !configuredHost.isBlank()) {
+            return InetAddress.getByName(configuredHost.trim());
+        }
 
         Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
         while (networkInterfaces.hasMoreElements()) {
