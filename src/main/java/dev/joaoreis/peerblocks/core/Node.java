@@ -131,8 +131,8 @@ public class Node {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 SubNode clientHandler = new SubNode(this, clientSocket, false);
-                clientHandler.start();
                 peers.add(clientHandler);
+                clientHandler.start();
             }
         } catch (IOException e) {
             throw new RuntimeException(
@@ -250,8 +250,8 @@ public class Node {
         try {
             Socket clientSocket = new Socket(targetAddress, targetPort);
             SubNode handler = new SubNode(this, clientSocket, true);
-            handler.start();
             peers.add(handler);
+            handler.start();
 
             Thread.sleep(Config.CONNECTION_SETUP_DELAY_MS);
             handler.sendNewConnectionRequest(address, port);

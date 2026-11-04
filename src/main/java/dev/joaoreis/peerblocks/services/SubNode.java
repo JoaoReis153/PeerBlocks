@@ -33,11 +33,12 @@ public class SubNode extends Thread {
         this.node = node;
         this.socket = socket;
         this.outgoingConnection = outgoingConnection;
+        initializeStreams();
     }
 
     @Override
     public void run() {
-        initializeStreams();
+        if (in == null) return;
         handleCommunication();
     }
 
