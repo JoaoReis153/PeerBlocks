@@ -1,5 +1,6 @@
 package dev.joaoreis.peerblocks.services;
 
+import dev.joaoreis.peerblocks.core.Config;
 import dev.joaoreis.peerblocks.core.Node;
 import dev.joaoreis.peerblocks.core.Utils;
 import dev.joaoreis.peerblocks.filesearch.FileSearchResult;
@@ -8,6 +9,9 @@ import dev.joaoreis.peerblocks.messaging.FileBlockRequestMessage;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -25,7 +29,8 @@ public class DownloadTasksManager extends Thread {
     private ExecutorService threadPool;
     private List<FileBlockRequestMessage> requestList;
     private Set<FileBlockRequestMessage> completedRequests;
-    private File destinationFile;
+    private final File partFile;
+    private File savedFile;
     private Map<String, Integer> numberOfDownloadsForPeer;
     private ArrayList<SubNode> peersWithFile;
     private int totalBlocks;
@@ -53,7 +58,12 @@ public class DownloadTasksManager extends Thread {
         this.totalBlocks = requestList.size();
         this.completedBlocks = 0;
         this.peersWithFile = getNodesWithFile();
-        this.destinationFile = new File(buildFilePath(fileInfo.getFileName()));
+        this.partFile =
+                new File(
+                        node.getFolder(),
+                        "."
+                                + HexFormat.of().formatHex(fileInfo.getHash())
+                                + Config.PARTIAL_DOWNLOAD_SUFFIX);
 
         // In case there are no nodes with the file, return
         if (peersWithFile.isEmpty()) {
@@ -78,6 +88,7 @@ public class DownloadTasksManager extends Thread {
             long start = System.currentTimeMillis();
             processDownload();
             verifyDownloadedFile();
+            savedFile = saveUnderFreeName(fileInfo.getFileName());
             downloadSuccessful = true;
             long duration = System.currentTimeMillis() - start;
             long safeDurationMs = Math.max(1L, duration);
@@ -97,7 +108,7 @@ public class DownloadTasksManager extends Thread {
                             + bytesPerSecond
                             + " bytes/s");
             node.getListener().reloadListModel();
-            node.files().put(destinationFile, fileInfo.getHash());
+            node.files().put(savedFile, fileInfo.getHash());
         } catch (Exception e) {
             node.getListener().finishDownloadProgress(fileInfo.getHash());
             log.warn(
@@ -111,11 +122,9 @@ public class DownloadTasksManager extends Thread {
                 log.error(
                         node.getAddressAndPortFormated()
                                 + " [taskmanager] Download failed or interrupted. Deleting partial file: "
-                                + destinationFile.getAbsolutePath());
-                if (destinationFile.exists()) {
-                    destinationFile.delete();
-                }
+                                + partFile.getAbsolutePath());
             }
+            if (partFile.exists()) partFile.delete();
         }
     }
 
@@ -142,7 +151,7 @@ public class DownloadTasksManager extends Thread {
     }
 
     private void verifyDownloadedFile() throws IOException {
-        byte[] actualHash = Utils.calculateFileHash(destinationFile.getAbsolutePath());
+        byte[] actualHash = Utils.calculateFileHash(partFile.getAbsolutePath());
         if (!MessageDigest.isEqual(actualHash, fileInfo.getHash())) {
             throw new IOException(
                     "Hash mismatch for " + fileInfo.getFileName() + ", download is corrupted");
@@ -222,7 +231,7 @@ public class DownloadTasksManager extends Thread {
             return;
         }
 
-        try (RandomAccessFile raf = new RandomAccessFile(destinationFile, "rw")) {
+        try (RandomAccessFile raf = new RandomAccessFile(partFile, "rw")) {
             raf.seek(answer.getOffset());
             raf.write(answer.getData());
 
@@ -274,7 +283,25 @@ public class DownloadTasksManager extends Thread {
         return node;
     }
 
-    private String buildFilePath(String fileName) {
-        return (getNode().getFolder().getAbsolutePath() + File.separator + fileName);
+    /*
+     * Moves the finished file to its name, or to "name (1).ext", "name (2).ext", ...
+     * when that name is taken, so an existing file is never overwritten.
+     */
+    private File saveUnderFreeName(String fileName) throws IOException {
+        Path folder = node.getFolder().toPath().toAbsolutePath().normalize();
+        int dot = fileName.lastIndexOf('.');
+        String stem = dot > 0 ? fileName.substring(0, dot) : fileName;
+        String extension = dot > 0 ? fileName.substring(dot) : "";
+
+        for (int copy = 0; copy < 1000; copy++) {
+            String name = copy == 0 ? fileName : stem + " (" + copy + ")" + extension;
+            Path target = folder.resolve(name).normalize();
+            try {
+                return Files.move(partFile.toPath(), target).toFile();
+            } catch (FileAlreadyExistsException e) {
+                // taken, try the next name
+            }
+        }
+        throw new IOException("No free name for " + fileName);
     }
 }

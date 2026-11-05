@@ -1,6 +1,7 @@
 package dev.joaoreis.peerblocks.services;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +81,8 @@ class DownloadIntegrationTest {
         File downloaded = TestNodes.fileOf(downloader, FILE_NAME);
         TestNodes.waitUntil(() -> !downloaded.exists(), 5_000);
         assertFalse(downloaded.exists(), "the corrupted file must be deleted");
+        TestNodes.waitUntil(() -> TestNodes.partFiles(downloader).length == 0, 5_000);
+        assertEquals(0, TestNodes.partFiles(downloader).length, "the .part file must be deleted");
     }
 
     @Test
@@ -122,6 +125,9 @@ class DownloadIntegrationTest {
             File downloaded = TestNodes.fileOf(downloader, FILE_NAME);
             TestNodes.waitUntil(() -> !downloaded.exists(), 5_000);
             assertFalse(downloaded.exists(), "the partial file must be deleted");
+            TestNodes.waitUntil(() -> TestNodes.partFiles(downloader).length == 0, 5_000);
+            assertEquals(
+                    0, TestNodes.partFiles(downloader).length, "the .part file must be deleted");
         } finally {
             source.delete();
         }

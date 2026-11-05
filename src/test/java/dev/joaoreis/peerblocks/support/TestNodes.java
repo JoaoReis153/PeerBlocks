@@ -93,6 +93,14 @@ public final class TestNodes {
         return new File(folder, fileName);
     }
 
+    /** Unfinished downloads left in the node's folder. */
+    public static File[] partFiles(Node node) {
+        File[] parts =
+                node.getFolder()
+                        .listFiles((dir, name) -> name.endsWith(Config.PARTIAL_DOWNLOAD_SUFFIX));
+        return parts == null ? new File[0] : parts;
+    }
+
     public static File fileOf(Node node, String fileName) {
         return new File(node.getFolder(), fileName);
     }

@@ -24,6 +24,8 @@ public final class Config {
     public static final int SENDER_THREADS = 5;
     // Downloads that can run at the same time
     public static final int MAX_CONCURRENT_DOWNLOADS = 10;
+    // Unfinished downloads end with this, and are never shared
+    public static final String PARTIAL_DOWNLOAD_SUFFIX = ".part";
 
     // ---- Blocks ----
 
