@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.joaoreis.peerblocks.core.Node;
+import dev.joaoreis.peerblocks.core.Utils;
+import dev.joaoreis.peerblocks.filesearch.WordSearchMessage;
 import dev.joaoreis.peerblocks.support.FakeSeeder;
 import dev.joaoreis.peerblocks.support.TestListener;
 import dev.joaoreis.peerblocks.support.TestNodes;
@@ -86,6 +88,26 @@ class DownloadFileSafetyTest {
         TestNodes.waitUntil(() -> TestNodes.partFiles(downloader).length == 0, 5_000);
         assertArrayEquals(mine, Files.readAllBytes(myNotes.toPath()));
         assertEquals(0, TestNodes.partFiles(downloader).length);
+    }
+
+    @Test
+    void hidesADownloadUntilItIsFinished() throws Exception {
+        File source = TestNodes.sourceFile("movie.bin");
+        Files.write(source.toPath(), TestNodes.randomBytes(8_000_000, 15));
+        byte[] hash = Utils.calculateFileHash(source.getAbsolutePath());
+        TestListener listener = new TestListener();
+        Node downloader = TestNodes.startNode(listener);
+        // Answers one block, then goes quiet, so the download stays half done
+        new FakeSeeder(downloader, source, "movie.bin", 1, false).connect();
+
+        TestNodes.searchAndDownload(downloader, listener, "movie", 1);
+        TestNodes.waitUntil(() -> TestNodes.partFiles(downloader).length > 0, 10_000);
+
+        assertEquals(1, TestNodes.partFiles(downloader).length, "blocks should go to a .part file");
+        assertFalse(TestNodes.fileOf(downloader, "movie.bin").exists());
+        assertEquals(0, downloader.files().sharedFiles().length, "a .part file must not be shared");
+        assertEquals(0, new FileSearcher(downloader).search(new WordSearchMessage("movie")).length);
+        assertNull(downloader.files().findFileByHash(hash));
     }
 
     @Test

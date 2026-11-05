@@ -45,7 +45,7 @@ public class FileIndex {
 
     /** Hashes every file in the folder that isn't cached yet, and waits for it. */
     public void refresh() {
-        for (File file : listFiles()) getHash(file);
+        for (File file : sharedFiles()) getHash(file);
     }
 
     /** Returns the file's hash, computing it if needed, or null if it can't be read. */
@@ -78,7 +78,7 @@ public class FileIndex {
             }
         }
         // Files the cache doesn't know about yet (new, or changed since they were hashed)
-        for (File file : listFiles()) {
+        for (File file : sharedFiles()) {
             if (hashes.containsKey(keyOf(file))) continue;
             byte[] fileHash = getHash(file);
             if (fileHash != null && MessageDigest.isEqual(fileHash, hash)) return file;
@@ -90,9 +90,13 @@ public class FileIndex {
         return findFileByHash(hash) != null;
     }
 
-    private File[] listFiles() {
-        File[] files = folder.listFiles(File::isFile);
+    public File[] sharedFiles() {
+        File[] files = folder.listFiles(FileIndex::isShared);
         return files == null ? new File[0] : files;
+    }
+
+    public static boolean isShared(File file) {
+        return file.isFile() && !file.getName().endsWith(Config.PARTIAL_DOWNLOAD_SUFFIX);
     }
 
     private Path keyOf(File file) {

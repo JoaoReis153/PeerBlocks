@@ -298,7 +298,7 @@ public class GUI implements NodeListener {
     @Override
     public synchronized void loadListModel(FileSearchResult[] list) {
         if (list == null || list.length == 0) return;
-        File[] files = node.getFolder().listFiles();
+        File[] files = node.files().sharedFiles();
         if (files != null) {
             for (File file : files) {
                 FileSearchResult fileSearchResult = new FileSearchResult(file, node);
@@ -414,7 +414,7 @@ public class GUI implements NodeListener {
     }
 
     private void refreshCurrentFolderFilesList() {
-        File[] files = node.getFolder().listFiles();
+        File[] files = node.files().sharedFiles();
         ArrayList<String> fileNames = new ArrayList<>();
 
         if (files != null) {

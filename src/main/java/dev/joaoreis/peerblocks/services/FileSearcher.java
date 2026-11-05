@@ -18,8 +18,7 @@ public class FileSearcher {
 
     /** Returns the matching files, or an empty array if there are none. */
     public FileSearchResult[] search(WordSearchMessage message) {
-        File[] files = node.getFolder().listFiles();
-        if (files == null) return new FileSearchResult[0];
+        File[] files = node.files().sharedFiles();
 
         String keyword = message.getKeyword().toLowerCase();
         List<FileSearchResult> results = new ArrayList<>();
