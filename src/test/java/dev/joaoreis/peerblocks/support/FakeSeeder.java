@@ -16,15 +16,17 @@ import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A seeder that speaks the wire protocol by hand and hangs up after a set number of answers. It
- * lets tests drop a peer in the middle of a download at an exact point.
+ * A seeder that speaks the wire protocol by hand and stops after a set number of answers. It lets
+ * tests drop a peer in the middle of a download at an exact point, or act like a hostile peer.
  */
 public class FakeSeeder {
 
     private final Node downloader;
     private final File backingFile;
     private final byte[] hash;
+    private final String advertisedName;
     private final int answersBeforeDrop;
+    private final boolean hangUp;
     private final int id = TestNodes.reserveId();
     private final int port = Config.BASE_PORT + id;
     private final AtomicInteger requestsSeen = new AtomicInteger();
@@ -36,10 +38,26 @@ public class FakeSeeder {
      * @param answersBeforeDrop how many block requests to answer before closing the connection
      */
     public FakeSeeder(Node downloader, File backingFile, int answersBeforeDrop) {
+        this(downloader, backingFile, backingFile.getName(), answersBeforeDrop, true);
+    }
+
+    /**
+     * @param advertisedName the file name sent in search results, which can differ from the real
+     *     one
+     * @param hangUp after the last answer, close the connection (true) or just stop answering
+     */
+    public FakeSeeder(
+            Node downloader,
+            File backingFile,
+            String advertisedName,
+            int answersBeforeDrop,
+            boolean hangUp) {
         this.downloader = downloader;
         this.backingFile = backingFile;
         this.hash = Utils.calculateFileHash(backingFile.getAbsolutePath());
+        this.advertisedName = advertisedName;
         this.answersBeforeDrop = answersBeforeDrop;
+        this.hangUp = hangUp;
     }
 
     /** Connects to the downloader and announces itself, like a real node's handshake. */
@@ -77,7 +95,7 @@ public class FakeSeeder {
             FileSearchResult result =
                     new FileSearchResult(
                             null,
-                            backingFile.getName(),
+                            advertisedName,
                             hash,
                             backingFile.length(),
                             downloader.getAddress(),
@@ -88,7 +106,7 @@ public class FakeSeeder {
         } else if (type == FileBlockRequestMessage.TYPE_ID) {
             FileBlockRequestMessage request = FileBlockRequestMessage.fromBytes(payload);
             if (requestsSeen.incrementAndGet() > answersBeforeDrop) {
-                socket.close(); // hang up without answering this block
+                if (hangUp) socket.close(); // stop without answering this block
                 return;
             }
             FileBlockAnswerMessage answer =

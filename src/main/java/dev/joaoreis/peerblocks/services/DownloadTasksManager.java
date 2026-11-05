@@ -85,10 +85,15 @@ public class DownloadTasksManager extends Thread {
             node.getListener()
                     .startDownloadProgress(fileInfo.getHash(), fileInfo.getFileName(), totalBlocks);
 
+            String fileName = safeFileName(fileInfo.getFileName());
+            if (fileName == null) {
+                throw new IOException("Invalid file name: " + fileInfo.getFileName());
+            }
+
             long start = System.currentTimeMillis();
             processDownload();
             verifyDownloadedFile();
-            savedFile = saveUnderFreeName(fileInfo.getFileName());
+            savedFile = saveUnderFreeName(fileName);
             downloadSuccessful = true;
             long duration = System.currentTimeMillis() - start;
             long safeDurationMs = Math.max(1L, duration);
@@ -296,6 +301,9 @@ public class DownloadTasksManager extends Thread {
         for (int copy = 0; copy < 1000; copy++) {
             String name = copy == 0 ? fileName : stem + " (" + copy + ")" + extension;
             Path target = folder.resolve(name).normalize();
+            if (!folder.equals(target.getParent())) {
+                throw new IOException("Refusing to save outside the folder: " + name);
+            }
             try {
                 return Files.move(partFile.toPath(), target).toFile();
             } catch (FileAlreadyExistsException e) {
@@ -303,5 +311,19 @@ public class DownloadTasksManager extends Thread {
             }
         }
         throw new IOException("No free name for " + fileName);
+    }
+
+    /*
+     * Keeps only the last part of a name a peer sent, so "../../.zshrc" becomes ".zshrc".
+     * Returns null when nothing usable is left.
+     */
+    static String safeFileName(String name) {
+        if (name == null) return null;
+        String last = name.replace('\\', '/');
+        last = last.substring(last.lastIndexOf('/') + 1);
+        last = last.replaceAll("\\p{Cntrl}", "").strip();
+        if (last.isEmpty() || last.equals(".") || last.equals("..")) return null;
+        if (last.endsWith(Config.PARTIAL_DOWNLOAD_SUFFIX)) return null;
+        return last;
     }
 }

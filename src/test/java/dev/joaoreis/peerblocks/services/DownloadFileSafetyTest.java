@@ -3,6 +3,7 @@ package dev.joaoreis.peerblocks.services;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.joaoreis.peerblocks.core.Node;
@@ -11,6 +12,7 @@ import dev.joaoreis.peerblocks.support.TestListener;
 import dev.joaoreis.peerblocks.support.TestNodes;
 import java.io.File;
 import java.nio.file.Files;
+import java.util.Arrays;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -24,6 +26,25 @@ class DownloadFileSafetyTest {
     @AfterEach
     void cleanUp() {
         TestNodes.cleanup();
+    }
+
+    @Test
+    void keepsAPeersFileInsideTheFolder() throws Exception {
+        byte[] content = TestNodes.randomBytes(500_000, 10);
+        File source = TestNodes.sourceFile("escaped.bin");
+        Files.write(source.toPath(), content);
+        TestListener listener = new TestListener();
+        Node downloader = TestNodes.startNode(listener);
+        // A hostile peer names its file so it would land next to the node's folder
+        new FakeSeeder(downloader, source, "../escaped.bin", Integer.MAX_VALUE, true).connect();
+
+        TestNodes.searchAndDownload(downloader, listener, "escaped", 1);
+
+        assertTrue(listener.awaitFinished(DOWNLOAD_TIMEOUT_MS), "download did not finish");
+        assertTrue(listener.downloadSucceeded());
+        assertFalse(new File(downloader.getFolder().getParentFile(), "escaped.bin").exists());
+        assertArrayEquals(
+                content, Files.readAllBytes(TestNodes.fileOf(downloader, "escaped.bin").toPath()));
     }
 
     @Test
@@ -65,5 +86,17 @@ class DownloadFileSafetyTest {
         TestNodes.waitUntil(() -> TestNodes.partFiles(downloader).length == 0, 5_000);
         assertArrayEquals(mine, Files.readAllBytes(myNotes.toPath()));
         assertEquals(0, TestNodes.partFiles(downloader).length);
+    }
+
+    @Test
+    void cleansUpNamesFromPeers() {
+        assertEquals("escaped.bin", DownloadTasksManager.safeFileName("../escaped.bin"));
+        assertEquals(".zshrc", DownloadTasksManager.safeFileName("../../.zshrc"));
+        assertEquals("evil.exe", DownloadTasksManager.safeFileName("..\\..\\evil.exe"));
+        assertEquals("passwd", DownloadTasksManager.safeFileName("/etc/passwd"));
+        assertEquals("song.mp3", DownloadTasksManager.safeFileName("so\u0000ng.mp3"));
+        for (String bad : Arrays.asList(null, "", "  ", ".", "..", "dir/", "../..", "x.part")) {
+            assertNull(DownloadTasksManager.safeFileName(bad), "should reject: " + bad);
+        }
     }
 }
