@@ -65,15 +65,16 @@ class DownloadIntegrationTest {
     @Test
     void discardsADownloadWhoseContentDoesNotMatchItsHash() throws Exception {
         byte[] content = TestNodes.randomBytes(2_000_000, 3);
-        Node seeder = TestNodes.startSeeder(FILE_NAME, content);
-        // The seeder already advertises the old hash, so it now serves a corrupted file
-        byte[] corrupted = content.clone();
-        for (int i = 0; i < corrupted.length; i++) corrupted[i] ^= 0x5A;
-        Files.write(TestNodes.fileOf(seeder, FILE_NAME).toPath(), corrupted);
+        File source = TestNodes.sourceFile(FILE_NAME);
+        Files.write(source.toPath(), content);
         TestListener listener = new TestListener();
         Node downloader = TestNodes.startNode(listener);
+        FakeSeeder lying = new FakeSeeder(downloader, source, Integer.MAX_VALUE);
+        byte[] corrupted = content.clone();
+        for (int i = 0; i < corrupted.length; i++) corrupted[i] ^= 0x5A;
+        Files.write(source.toPath(), corrupted);
 
-        TestNodes.connect(seeder, downloader);
+        lying.connect();
         TestNodes.searchAndDownload(downloader, listener, FILE_NAME, 1);
 
         assertTrue(listener.awaitFinished(DOWNLOAD_TIMEOUT_MS), "download did not finish");
