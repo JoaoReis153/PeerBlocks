@@ -8,6 +8,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Answer to a FileBlockRequestMessage, containing the actual file data.
@@ -16,6 +18,8 @@ import java.util.Arrays;
  * [String: senderAddress] [FileBlockRequestMessage: request] [byte[]: data]
  */
 public class FileBlockAnswerMessage {
+
+    private static final Logger log = LoggerFactory.getLogger(FileBlockAnswerMessage.class);
 
     public static final byte TYPE_ID = 5;
 
@@ -80,10 +84,10 @@ public class FileBlockAnswerMessage {
             raf.readFully(blockData);
             this.data = blockData;
         } catch (IOException e) {
-            System.err.println("Error reading file: " + e.getMessage());
+            log.error("Error reading file: " + e.getMessage());
             this.data = new byte[0];
         } catch (IllegalArgumentException e) {
-            System.err.println("Warning: " + e.getMessage());
+            log.warn("Warning: " + e.getMessage());
             this.data = new byte[0];
         }
     }

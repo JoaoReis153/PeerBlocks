@@ -21,8 +21,12 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Node {
+
+    private static final Logger log = LoggerFactory.getLogger(Node.class);
 
     private final int nodeId;
     private final int port;
@@ -126,7 +130,7 @@ public class Node {
      * and creating a new handler for each connection
      */
     public void startServing() {
-        System.out.println(getAddressAndPortFormated() + "Awaiting connection...");
+        log.info(getAddressAndPortFormated() + "Awaiting connection...");
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -171,8 +175,7 @@ public class Node {
 
             establishConnection(targetInetAddress, targetPort);
         } catch (Exception e) {
-            System.err.println("Error connecting to node: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error connecting to node", e);
         }
     }
 
@@ -206,20 +209,17 @@ public class Node {
      */
     private boolean isValidConnection(InetAddress targetAddress, int targetPort) {
         if (!Utils.isValidPort(targetPort)) {
-            System.out.println(
-                    getAddressAndPortFormated() + "Failed to connect: Invalid port range");
+            log.warn(getAddressAndPortFormated() + "Failed to connect: Invalid port range");
             return false;
         }
 
         if (targetAddress.equals(this.address) && targetPort == this.port) {
-            System.out.println(
-                    getAddressAndPortFormated() + "Failed to connect: Cannot connect to itself");
+            log.warn(getAddressAndPortFormated() + "Failed to connect: Cannot connect to itself");
             return false;
         }
 
         if (isAlreadyConnected(targetAddress, targetPort)) {
-            System.out.println(
-                    getAddressAndPortFormated() + "Failed to connect: Connection already exists");
+            log.warn(getAddressAndPortFormated() + "Failed to connect: Connection already exists");
             return false;
         }
 
@@ -256,12 +256,12 @@ public class Node {
             Thread.sleep(Config.CONNECTION_SETUP_DELAY_MS);
             handler.sendNewConnectionRequest(address, port);
         } catch (IOException e) {
-            System.err.println(
+            log.error(
                     getAddressAndPortFormated()
                             + "Failed to establish connection: "
                             + e.getMessage());
         } catch (InterruptedException e) {
-            System.err.println(
+            log.error(
                     getAddressAndPortFormated()
                             + "Failed to establish connection: "
                             + e.getMessage());
@@ -287,7 +287,7 @@ public class Node {
             // Check if already has the file in the directory
             if (hasFileWithHash(file.get(0).getHash())) continue;
             FileSearchResult example = file.get(0);
-            System.out.println(getAddressAndPortFormated() + "Request file: " + example);
+            log.info(getAddressAndPortFormated() + "Request file: " + example);
             DownloadTasksManager downloadManager = new DownloadTasksManager(this, file);
             downloadManagers.put(hashKey, downloadManager);
             downloadTaskManagersThreadPool.execute(downloadManager);
@@ -313,7 +313,7 @@ public class Node {
                                             file.getAbsolutePath(),
                                             Utils.calculateFileHash(file.getAbsolutePath()));
                                 } catch (RuntimeException e) {
-                                    System.err.println(
+                                    log.error(
                                             getAddressAndPortFormated()
                                                     + " Failed to load hash for file: "
                                                     + file.getAbsolutePath());
@@ -362,7 +362,7 @@ public class Node {
                 hashes.put(filePath, hash);
                 return hash;
             } catch (RuntimeException e) {
-                System.err.println(
+                log.error(
                         getAddressAndPortFormated()
                                 + " Failed to calculate hash for file: "
                                 + filePath);
@@ -438,7 +438,7 @@ public class Node {
                 Utils.isValidPort(peer.getSocket().getPort())
                         ? peer.getSocket().getPort()
                         : peer.getOriginalBeforeOSchangePort();
-        System.out.println(
+        log.info(
                 getAddressAndPortFormated()
                         + "Removed connection with: "
                         + peer.getSocket().getInetAddress().getHostAddress()

@@ -6,8 +6,12 @@ import dev.joaoreis.peerblocks.messaging.FileBlockAnswerMessage;
 import dev.joaoreis.peerblocks.messaging.FileBlockRequestMessage;
 import java.io.File;
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SenderAssistant extends Thread {
+
+    private static final Logger log = LoggerFactory.getLogger(SenderAssistant.class);
 
     private final Node node;
 
@@ -20,10 +24,9 @@ public class SenderAssistant extends Thread {
             try {
                 processBlockRequest();
             } catch (InterruptedException e) {
-                System.out.println(node.getAddressAndPortFormated() + " Error in SenderAssistant");
-                e.printStackTrace();
+                log.warn(node.getAddressAndPortFormated() + " SenderAssistant interrupted", e);
             } catch (RuntimeException e) {
-                System.out.println(
+                log.warn(
                         node.getAddressAndPortFormated()
                                 + " SenderAssistant: skipped a request: "
                                 + e.getMessage());
@@ -45,16 +48,16 @@ public class SenderAssistant extends Thread {
         FileBlockAnswerMessage answer = fillRequest(request);
         if (answer == null) return;
         if (request.getSenderAddress() == null) {
-            System.out.println(node.getAddressAndPortFormated() + " SenderAssistant: Null address");
+            log.info(node.getAddressAndPortFormated() + " SenderAssistant: Null address");
             return;
         } else if (request.getSenderPort() == 0) {
-            System.out.println(node.getAddressAndPortFormated() + " SenderAssistant: Null port");
+            log.info(node.getAddressAndPortFormated() + " SenderAssistant: Null port");
             return;
         }
 
         SubNode peer = node.getPeerToSend(request.getSenderAddress(), request.getSenderPort());
         if (peer == null) {
-            System.out.println(
+            log.info(
                     node.getAddressAndPortFormated() + " SenderAssistant: Requesting peer is gone");
             return;
         }

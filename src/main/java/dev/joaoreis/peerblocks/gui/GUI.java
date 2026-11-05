@@ -31,8 +31,12 @@ import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GUI implements NodeListener {
+
+    private static final Logger log = LoggerFactory.getLogger(GUI.class);
 
     private JFrame frame;
     private JList<FileSearchResult> fileList;
@@ -90,7 +94,7 @@ public class GUI implements NodeListener {
                             try {
                                 node.startServing();
                             } catch (Exception e) {
-                                System.err.println("Failed to start server: " + e.getMessage());
+                                log.error("Failed to start server: " + e.getMessage());
                                 frame.dispose();
                             }
                         })
@@ -204,7 +208,7 @@ public class GUI implements NodeListener {
                         allFiles.clear();
                         String searchText = searchTextField.getText().toLowerCase();
                         node.broadcastWordSearchMessageRequest(searchText);
-                        System.out.println(
+                        log.info(
                                 node.getAddressAndPortFormated()
                                         + "Search request sent for keyword: ["
                                         + searchText
@@ -240,11 +244,6 @@ public class GUI implements NodeListener {
      */
     @Override
     public synchronized void reloadListModel() {
-        /*
-        System.out.println(
-            node.getAddressAndPortFormated() + "Reloading GUI list"
-        );
-         */
         listModel.clear();
         allFiles.clear();
         node.broadcastWordSearchMessageRequest(lastSearchKeyword);
@@ -357,7 +356,7 @@ public class GUI implements NodeListener {
                 SwingUtilities.invokeAndWait(promptTask);
             }
         } catch (Exception e) {
-            System.err.println("Failed to show incoming connection dialog: " + e.getMessage());
+            log.error("Failed to show incoming connection dialog: " + e.getMessage());
             return false;
         }
 

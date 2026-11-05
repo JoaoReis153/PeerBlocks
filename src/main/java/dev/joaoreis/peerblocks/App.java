@@ -5,8 +5,12 @@ import dev.joaoreis.peerblocks.gui.GUI;
 import java.io.File;
 import java.io.IOException;
 import java.util.Scanner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class App {
+
+    private static final Logger log = LoggerFactory.getLogger(App.class);
 
     private static final String NODE_FILES_BASE = Config.WORK_FOLDER;
     private static int id = -1;
@@ -61,17 +65,16 @@ public class App {
                                 try {
                                     deleteDirectory(dirToRemoveFile);
                                 } catch (IOException ex) {
-                                    System.err.println(
-                                            "Failed to remove the directory: " + dirToRemoveFile);
+                                    log.error("Failed to remove the directory: " + dirToRemoveFile);
                                 }
                             }
                         });
 
         if (gui == null) {
-            System.err.println("Failed to create node.");
+            log.error("Failed to create node.");
             System.exit(1);
         } else {
-            System.out.println("Node created: " + gui.getNode().getAddressAndPortFormated());
+            log.info("Node created: " + gui.getNode().getAddressAndPortFormated());
             gui.open();
         }
 
@@ -107,12 +110,11 @@ public class App {
         try {
             deleteDirectory(workingFolder);
         } catch (IOException e) {
-            System.err.println("Failed to remove the directory: " + workingFolder);
+            log.error("Failed to remove the directory: " + workingFolder);
             System.exit(1);
         }
         if (!workingFolder.mkdirs()) {
-            System.err.println(
-                    "Failed to create the directory: " + workingFolder.getAbsolutePath());
+            log.error("Failed to create the directory: " + workingFolder.getAbsolutePath());
             System.exit(1);
         }
     }

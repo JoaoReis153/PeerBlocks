@@ -8,6 +8,9 @@ repositories {
 }
 
 dependencies {
+    implementation("org.slf4j:slf4j-api:2.0.16")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.12")
+
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -34,6 +37,9 @@ val tools: SourceSet by sourceSets.creating {
     compileClasspath += sourceSets.main.get().output
     runtimeClasspath += sourceSets.main.get().output
 }
+
+configurations[tools.implementationConfigurationName].extendsFrom(configurations.implementation.get())
+configurations[tools.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
 
 // Make sure the launchers still compile whenever the project is checked (and in CI)
 tasks.check {

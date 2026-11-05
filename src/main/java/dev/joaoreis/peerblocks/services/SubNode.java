@@ -14,8 +14,12 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SubNode extends Thread {
+
+    private static final Logger log = LoggerFactory.getLogger(SubNode.class);
 
     private final Node node;
     private final FileSearcher fileSearcher;
@@ -48,7 +52,7 @@ public class SubNode extends Thread {
             out = new DataOutputStream(socket.getOutputStream());
             in = new DataInputStream(socket.getInputStream());
         } catch (IOException e) {
-            System.err.println("Error initializing streams: " + e.getMessage());
+            log.error("Error initializing streams: " + e.getMessage());
             closeResources();
         }
     }
@@ -70,11 +74,11 @@ public class SubNode extends Thread {
                 handleIncomingMessage(typeId, payload);
             }
         } catch (EOFException e) {
-            System.err.println("End of stream reached unexpectedly.");
+            log.warn("End of stream reached unexpectedly.");
         } catch (IOException e) {
-            System.err.println(node.getAddressAndPortFormated() + "IO error: " + e.getMessage());
+            log.warn(node.getAddressAndPortFormated() + "IO error: " + e.getMessage());
         } finally {
-            System.err.println("Closed connection for " + node.getAddressAndPortFormated());
+            log.warn("Closed connection for " + node.getAddressAndPortFormated());
             close();
         }
     }
@@ -97,7 +101,7 @@ public class SubNode extends Thread {
                 handleFileBlockAnswer(FileBlockAnswerMessage.fromBytes(payload));
                 break;
             default:
-                System.out.println(
+                log.info(
                         node.getAddressAndPortFormated()
                                 + "Received unknown message type ID: "
                                 + typeId);
@@ -119,7 +123,7 @@ public class SubNode extends Thread {
                                     request.getClientAddress().getHostAddress(),
                                     request.getClientPort());
             if (!accepted) {
-                System.out.println(
+                log.info(
                         node.getAddressAndPortFormated()
                                 + "Rejected incoming connection from "
                                 + request.getClientAddress().getHostAddress()
@@ -152,7 +156,7 @@ public class SubNode extends Thread {
     private void handleFileSearchResults(FileSearchResult[] results) {
         NodeListener listener = node.getListener();
         if (listener == null) {
-            System.out.println(
+            log.info(
                     node.getAddressAndPortFormated()
                             + "No listener to show search results, ignoring them");
             return;
@@ -211,7 +215,7 @@ public class SubNode extends Thread {
      */
     public void sendNewConnectionRequest(InetAddress endereco, int thisPort) {
         if (out == null) {
-            System.out.println(
+            log.info(
                     node.getAddressAndPortFormated()
                             + "OutputStream is null [invalid port: "
                             + thisPort
@@ -228,7 +232,7 @@ public class SubNode extends Thread {
      */
     public synchronized void sendObject(Object message) {
         if (out == null || socket.isClosed()) {
-            System.out.println("Socket closed, cannot send");
+            log.warn("Socket closed, cannot send");
             close();
             return;
         }
@@ -262,7 +266,8 @@ public class SubNode extends Thread {
             out.flush();
 
         } catch (IOException e) {
-            e.printStackTrace();
+            log.warn(
+                    node.getAddressAndPortFormated() + "Failed to send message: " + e.getMessage());
             close();
         }
     }
@@ -279,7 +284,7 @@ public class SubNode extends Thread {
         closeResources();
         int port =
                 Utils.isValidPort(socket.getPort()) ? socket.getPort() : originalBeforeOSchangePort;
-        System.out.println(
+        log.info(
                 node.getAddressAndPortFormated()
                         + "Thread closed for SubNode at "
                         + socket.getInetAddress().getHostAddress()
@@ -295,7 +300,7 @@ public class SubNode extends Thread {
             if (out != null) out.close();
             if (socket != null) socket.close();
         } catch (IOException e) {
-            System.out.println(
+            log.warn(
                     node.getAddressAndPortFormated()
                             + "Error closing resources: "
                             + e.getMessage());
@@ -319,7 +324,7 @@ public class SubNode extends Thread {
                 Utils.isValidPort(originalBeforeOSchangePort)
                         ? originalBeforeOSchangePort
                         : socket.getPort();
-        System.out.println(
+        log.info(
                 node.getAddressAndPortFormated()
                         + "Added new node::NodeAddress [address="
                         + socket.getInetAddress().getHostAddress()

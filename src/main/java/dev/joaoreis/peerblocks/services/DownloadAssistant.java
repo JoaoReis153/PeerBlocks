@@ -2,8 +2,12 @@ package dev.joaoreis.peerblocks.services;
 
 import dev.joaoreis.peerblocks.core.Config;
 import dev.joaoreis.peerblocks.messaging.FileBlockRequestMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DownloadAssistant extends Thread {
+
+    private static final Logger log = LoggerFactory.getLogger(DownloadAssistant.class);
 
     private final DownloadTasksManager taskManager;
     private final SubNode peerToRequestBlock;
@@ -53,7 +57,7 @@ public class DownloadAssistant extends Thread {
 
         taskManager.addDownloadRequest(request);
         if (taskManager.isPeerDisconnected(peerToRequestBlock)) {
-            System.out.println(
+            log.info(
                     taskManager.getNode().getAddressAndPortFormated()
                             + " [taskmanager] [downloadassistant] Peer disconnected, handing its block back");
             return false;

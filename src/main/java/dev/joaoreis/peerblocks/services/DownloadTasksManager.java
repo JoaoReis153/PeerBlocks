@@ -12,8 +12,12 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DownloadTasksManager extends Thread {
+
+    private static final Logger log = LoggerFactory.getLogger(DownloadTasksManager.class);
 
     private Node node;
     private FileSearchResult fileInfo;
@@ -37,7 +41,7 @@ public class DownloadTasksManager extends Thread {
         this.requests = requests;
         this.fileInfo = requests.get(0);
 
-        System.out.println(
+        log.info(
                 node.getAddressAndPortFormated()
                         + "[taskmanager]"
                         + "Download task manager created for file "
@@ -53,11 +57,11 @@ public class DownloadTasksManager extends Thread {
 
         // In case there are no nodes with the file, return
         if (peersWithFile.isEmpty()) {
-            System.out.println(node.getAddressAndPort() + "Couldn't find peers with the file");
+            log.info(node.getAddressAndPort() + "Couldn't find peers with the file");
             return;
         }
         this.threadPool = Executors.newFixedThreadPool(peersWithFile.size());
-        System.out.println(
+        log.info(
                 node.getAddressAndPortFormated()
                         + "[taskmanager]"
                         + " "
@@ -82,7 +86,7 @@ public class DownloadTasksManager extends Thread {
             node.getListener()
                     .completeDownloadProgress(
                             fileInfo.getHash(), duration, new HashMap<>(numberOfDownloadsForPeer));
-            System.out.println(
+            log.info(
                     node.getAddressAndPortFormated()
                             + "[taskmanager]"
                             + "Download finished for file "
@@ -96,16 +100,15 @@ public class DownloadTasksManager extends Thread {
             node.loadHashes();
         } catch (Exception e) {
             node.getListener().finishDownloadProgress(fileInfo.getHash());
-            System.out.println(
+            log.warn(
                     node.getAddressAndPortFormated()
                             + "Error in DownloadTasksManager: "
                             + e.getMessage());
-            // e.printStackTrace();
         } finally {
             if (threadPool != null) threadPool.shutdownNow();
             node.removeDownloadProcess(fileInfo.getHash());
             if (!downloadSuccessful) {
-                System.err.println(
+                log.error(
                         node.getAddressAndPortFormated()
                                 + " [taskmanager] Download failed or interrupted. Deleting partial file: "
                                 + destinationFile.getAbsolutePath());
@@ -228,7 +231,7 @@ public class DownloadTasksManager extends Thread {
             node.getListener().updateDownloadProgress(fileInfo.getHash(), completedBlocks);
             notifyAll();
         } catch (IOException e) {
-            System.err.println(
+            log.error(
                     node.getAddressAndPortFormated()
                             + " Error writing block to disk: "
                             + e.getMessage());
