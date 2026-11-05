@@ -24,7 +24,9 @@ public class SenderAssistant extends Thread {
             try {
                 processBlockRequest();
             } catch (InterruptedException e) {
-                log.warn(node.getAddressAndPortFormated() + " SenderAssistant interrupted", e);
+                log.info(node.getAddressAndPortFormated() + " SenderAssistant stopping");
+                Thread.currentThread().interrupt();
+                return;
             } catch (RuntimeException e) {
                 log.warn(
                         node.getAddressAndPortFormated()

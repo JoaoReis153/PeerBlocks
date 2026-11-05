@@ -45,7 +45,7 @@ public class DownloadTasksManager extends Thread {
                 node.getAddressAndPortFormated()
                         + "[taskmanager]"
                         + "Download task manager created for file "
-                        + fileInfo.getHash());
+                        + HexFormat.of().formatHex(fileInfo.getHash()));
         this.completedRequests = new HashSet<FileBlockRequestMessage>();
         this.numberOfDownloadsForPeer = new HashMap<>();
         this.requestList =

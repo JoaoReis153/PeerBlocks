@@ -371,7 +371,7 @@ public class Node {
             }
         }
     }
-    
+
     public File findFileByHash(byte[] hash) {
         for (Map.Entry<String, byte[]> entry : hashes.entrySet()) {
             if (Arrays.equals(entry.getValue(), hash)) {
@@ -392,6 +392,7 @@ public class Node {
         }
 
         File[] files = folder.listFiles();
+        if (files == null) return false;
 
         for (File file : files) {
             byte[] fileHash = hashes.get(file.getAbsolutePath());
