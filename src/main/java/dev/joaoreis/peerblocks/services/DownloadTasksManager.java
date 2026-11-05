@@ -97,7 +97,7 @@ public class DownloadTasksManager extends Thread {
                             + bytesPerSecond
                             + " bytes/s");
             node.getListener().reloadListModel();
-            node.files().refresh();
+            node.files().put(destinationFile, fileInfo.getHash());
         } catch (Exception e) {
             node.getListener().finishDownloadProgress(fileInfo.getHash());
             log.warn(
