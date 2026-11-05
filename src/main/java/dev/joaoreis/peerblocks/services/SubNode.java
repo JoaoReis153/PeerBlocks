@@ -170,7 +170,7 @@ public class SubNode extends Thread {
      * When receives one, adds it to the list of requests to process in the node
      */
     private void handleFileBlockRequest(FileBlockRequestMessage request) {
-        node.addBlockRequest(request);
+        node.blockRequests().add(request);
     }
 
     /*

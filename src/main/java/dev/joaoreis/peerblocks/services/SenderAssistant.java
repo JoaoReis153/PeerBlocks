@@ -39,14 +39,11 @@ public class SenderAssistant extends Thread {
     /*
      * Processes a block request message.
      *
-     * It takes a block request message from the blocksToProcess list in  the node
+     * It takes a block request message from the node's block request queue
      * and sends a block answer message to the peer that sent the request.
      */
     public void processBlockRequest() throws InterruptedException {
-        FileBlockRequestMessage request;
-
-        request = this.node.getBlockRequest();
-        if (request == null) return;
+        FileBlockRequestMessage request = node.blockRequests().take();
         FileBlockAnswerMessage answer = fillRequest(request);
         if (answer == null) return;
         if (request.getSenderAddress() == null) {

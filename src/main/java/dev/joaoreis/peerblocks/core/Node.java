@@ -2,7 +2,6 @@ package dev.joaoreis.peerblocks.core;
 
 import dev.joaoreis.peerblocks.filesearch.FileSearchResult;
 import dev.joaoreis.peerblocks.messaging.FileBlockAnswerMessage;
-import dev.joaoreis.peerblocks.messaging.FileBlockRequestMessage;
 import dev.joaoreis.peerblocks.services.DownloadTasksManager;
 import dev.joaoreis.peerblocks.services.SenderAssistant;
 import dev.joaoreis.peerblocks.services.SubNode;
@@ -11,7 +10,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -35,7 +33,7 @@ public class Node {
     private final Set<SubNode> peers;
     private final Map<String, DownloadTasksManager> downloadManagers;
     private final NodeListener listener;
-    private ArrayList<FileBlockRequestMessage> blocksToProcess;
+    private final BlockRequestQueue blockRequests = new BlockRequestQueue();
     private ExecutorService senders;
     private Map<String, byte[]> hashes;
 
@@ -49,7 +47,6 @@ public class Node {
         this.listener = listener;
         this.peers = ConcurrentHashMap.newKeySet();
         this.downloadManagers = new ConcurrentHashMap<>();
-        this.blocksToProcess = new ArrayList<>();
         validateId();
         initializeSenders(Config.SENDER_THREADS);
         this.address = initializeAddress();
@@ -142,19 +139,6 @@ public class Node {
             throw new RuntimeException(
                     getAddressAndPortFormated() + "Failed to start server: " + e.getMessage());
         }
-    }
-
-    // Add a new request to the list of requests to process
-    public synchronized void addElementToBlocksToProcess(FileBlockRequestMessage request) {
-        blocksToProcess.add(request);
-        notifyAll();
-    }
-
-    // Remove a request from the list of requests to process
-    public synchronized void removeElementFromBlocksToProcess(FileBlockRequestMessage request)
-            throws InterruptedException {
-        while (blocksToProcess.isEmpty()) wait();
-        blocksToProcess.remove(request);
     }
 
     /*
@@ -405,18 +389,6 @@ public class Node {
         return false;
     }
 
-    // Returns the first request in the list of requests to process
-    public synchronized FileBlockRequestMessage getBlockRequest() throws InterruptedException {
-        while (blocksToProcess.isEmpty()) wait();
-        return blocksToProcess.remove(0);
-    }
-
-    // Add a new request to the list of requests to process
-    public synchronized void addBlockRequest(FileBlockRequestMessage request) {
-        blocksToProcess.add(request);
-        notifyAll();
-    }
-
     // Remove a request from the list of requests to process
     public void removeDownloadProcess(byte[] hash) {
         downloadManagers.remove(hashKey(hash));
@@ -462,6 +434,10 @@ public class Node {
                         + peer.getSocket().getInetAddress().getHostAddress()
                         + "::"
                         + port);
+    }
+
+    public BlockRequestQueue blockRequests() {
+        return blockRequests;
     }
 
     public File getFolder() {
