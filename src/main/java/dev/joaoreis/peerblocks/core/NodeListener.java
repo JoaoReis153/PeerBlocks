@@ -42,6 +42,11 @@ public interface NodeListener {
     void reloadListModel();
 
     /*
+     * Called when a peer connects or disconnects, so the listener can refresh its list of peers.
+     */
+    default void peersChanged() {}
+
+    /*
      * Called when a peer returns search results that the listener should display.
      */
     void loadListModel(FileSearchResult[] list);

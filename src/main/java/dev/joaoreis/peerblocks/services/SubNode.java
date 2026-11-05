@@ -135,6 +135,7 @@ public class SubNode extends Thread {
         }
 
         logNewConnection();
+        node.notifyPeersChanged();
     }
 
     /*

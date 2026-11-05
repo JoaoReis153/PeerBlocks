@@ -3,6 +3,7 @@ package dev.joaoreis.peerblocks.gui;
 import dev.joaoreis.peerblocks.core.Node;
 import dev.joaoreis.peerblocks.core.NodeListener;
 import dev.joaoreis.peerblocks.filesearch.FileSearchResult;
+import dev.joaoreis.peerblocks.services.SubNode;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -43,6 +44,7 @@ public class GUI implements NodeListener {
     private DefaultListModel<FileSearchResult> listModel;
     private JList<String> currentFolderFileList;
     private DefaultListModel<String> currentFolderFilesModel;
+    private DefaultListModel<String> peersModel;
     private ArrayList<FileSearchResult> localFiles = new ArrayList<>();
     private ArrayList<FileSearchResult> allFiles;
     private Node node;
@@ -107,6 +109,32 @@ public class GUI implements NodeListener {
 
         frame.setVisible(SHOW);
         refreshCurrentFolderFilesList();
+        peersChanged();
+    }
+
+    /*
+     * Shows the peers this node is connected to as address:port
+     * Peers that haven't finished their handshake yet have no port and are left out
+     */
+    @Override
+    public void peersChanged() {
+        List<String> peers = new ArrayList<>();
+        for (SubNode peer : node.getPeers()) {
+            if (peer.getDestinationPort() > 0) {
+                peers.add(peer.getDestinationAddress() + ":" + peer.getDestinationPort());
+            }
+        }
+        Collections.sort(peers);
+
+        SwingUtilities.invokeLater(
+                () -> {
+                    peersModel.clear();
+                    if (peers.isEmpty()) {
+                        peersModel.addElement("(no peers connected)");
+                        return;
+                    }
+                    for (String peer : peers) peersModel.addElement(peer);
+                });
     }
 
     private void addFrameContent() {
@@ -152,6 +180,20 @@ public class GUI implements NodeListener {
         currentFolderFileList.setFocusable(false);
         currentFolderPanel.add(new JScrollPane(currentFolderFileList), BorderLayout.CENTER);
 
+        JPanel peersPanel = new JPanel(new BorderLayout());
+        peersPanel.setPreferredSize(new Dimension(240, 120));
+        peersPanel.setBorder(BorderFactory.createTitledBorder("Connected Peers"));
+
+        peersModel = new DefaultListModel<>();
+        JList<String> peersList = new JList<>(peersModel);
+        peersList.setFocusable(false);
+        peersPanel.add(new JScrollPane(peersList), BorderLayout.CENTER);
+
+        currentFolderPanel.setPreferredSize(new Dimension(240, 120));
+        JPanel westPanel = new JPanel(new GridLayout(2, 1));
+        westPanel.add(currentFolderPanel);
+        westPanel.add(peersPanel);
+
         JPanel rightButtonsPanel = new JPanel();
         rightButtonsPanel.setLayout(new GridLayout(2, 1, 10, 10));
 
@@ -164,7 +206,7 @@ public class GUI implements NodeListener {
         rightButtonsPanel.add(downloadButton);
         rightButtonsPanel.add(connectButton);
 
-        bottomPanel.add(currentFolderPanel, BorderLayout.WEST);
+        bottomPanel.add(westPanel, BorderLayout.WEST);
         bottomPanel.add(leftArea, BorderLayout.CENTER);
         bottomPanel.add(rightButtonsPanel, BorderLayout.EAST);
 

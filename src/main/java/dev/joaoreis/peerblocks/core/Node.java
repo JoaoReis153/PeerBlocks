@@ -252,6 +252,7 @@ public class Node {
             SubNode handler = new SubNode(this, clientSocket, true);
             peers.add(handler);
             handler.start();
+            notifyPeersChanged();
 
             Thread.sleep(Config.CONNECTION_SETUP_DELAY_MS);
             handler.sendNewConnectionRequest(address, port);
@@ -427,9 +428,14 @@ public class Node {
         downloadManager.addNumberOfDownloadsForPeer(address.getHostAddress() + ":" + port, 1);
     }
 
+    public void notifyPeersChanged() {
+        if (listener != null) listener.peersChanged();
+    }
+
     // Remove a peer from the list of peers
     public void removePeer(SubNode peer) {
         peers.remove(peer);
+        notifyPeersChanged();
         // Let active downloads hand this peer's blocks to the others right away
         for (DownloadTasksManager manager : downloadManagers.values()) {
             manager.peerDisconnected(peer);
