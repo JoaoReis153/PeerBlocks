@@ -305,6 +305,7 @@ public class Node {
                         () -> {
                             if (folder == null || !folder.exists() || !folder.isDirectory()) return;
 
+                            checkMissingFiles();
                             File[] files = folder.listFiles();
                             if (files == null) return;
 
@@ -354,7 +355,6 @@ public class Node {
      * If the hash is not in the hash map, it calculates the hash and adds it to the map
      */
     public byte[] getHash(String filePath) {
-        checkMissingFiles();
         if (hashes.containsKey(filePath)) {
             return hashes.get(filePath);
         } else {
@@ -370,6 +370,17 @@ public class Node {
                 return null;
             }
         }
+    }
+    
+    public File findFileByHash(byte[] hash) {
+        for (Map.Entry<String, byte[]> entry : hashes.entrySet()) {
+            if (Arrays.equals(entry.getValue(), hash)) {
+                File file = new File(entry.getKey());
+                if (file.isFile()) return file;
+                hashes.remove(entry.getKey(), entry.getValue()); // deleted from disk
+            }
+        }
+        return null;
     }
 
     /*

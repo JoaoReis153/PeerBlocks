@@ -92,7 +92,10 @@ public class SenderAssistant extends Thread {
      *
      * If the file is not found, it returns null.
      */
-    private synchronized File findFileByHash(byte[] hash) {
+    private File findFileByHash(byte[] hash) {
+        File cached = node.findFileByHash(hash);
+        if (cached != null) return cached;
+
         File folder = new File(Config.WORK_FOLDER + node.getId() + "/");
         if (!folder.isDirectory()) {
             throw new IllegalArgumentException("Invalid directory path: " + folder.getPath());
