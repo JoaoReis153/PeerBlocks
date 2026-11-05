@@ -2,6 +2,7 @@ package dev.joaoreis.peerblocks.services;
 
 import dev.joaoreis.peerblocks.core.Config;
 import dev.joaoreis.peerblocks.core.Node;
+import dev.joaoreis.peerblocks.core.NodeListener;
 import dev.joaoreis.peerblocks.core.Utils;
 import dev.joaoreis.peerblocks.filesearch.FileSearchResult;
 import dev.joaoreis.peerblocks.filesearch.WordSearchMessage;
@@ -149,12 +150,14 @@ public class SubNode extends Thread {
      * The file search results are used to send the files that contain the keyword
      */
     private void handleFileSearchResults(FileSearchResult[] results) {
-        if (node.getListener() == null) {
+        NodeListener listener = node.getListener();
+        if (listener == null) {
             System.out.println(
-                    node.getAddressAndPortFormated() + "There was a problem with the GUI");
-            System.exit(1);
+                    node.getAddressAndPortFormated()
+                            + "No listener to show search results, ignoring them");
+            return;
         }
-        node.getListener().loadListModel(results);
+        listener.loadListModel(results);
     }
 
     /*
