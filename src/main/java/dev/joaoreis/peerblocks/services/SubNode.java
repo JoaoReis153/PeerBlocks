@@ -11,14 +11,13 @@ import dev.joaoreis.peerblocks.messaging.NewConnectionRequest;
 import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
 public class SubNode extends Thread {
 
     private final Node node;
+    private final FileSearcher fileSearcher;
 
     private final Socket socket;
     private final boolean outgoingConnection;
@@ -31,6 +30,7 @@ public class SubNode extends Thread {
 
     public SubNode(Node node, Socket socket, boolean outgoingConnection) {
         this.node = node;
+        this.fileSearcher = new FileSearcher(node);
         this.socket = socket;
         this.outgoingConnection = outgoingConnection;
         initializeStreams();
@@ -72,7 +72,6 @@ public class SubNode extends Thread {
             System.err.println("End of stream reached unexpectedly.");
         } catch (IOException e) {
             System.err.println(node.getAddressAndPortFormated() + "IO error: " + e.getMessage());
-            // e.printStackTrace(); // Optional: remove if too noisy
         } finally {
             System.err.println("Closed connection for " + node.getAddressAndPortFormated());
             close();
@@ -139,16 +138,9 @@ public class SubNode extends Thread {
      * and to send the files that contain the keyword
      */
     private void handleWordSearchMessage(WordSearchMessage message) {
-        /*
-        System.out.println(
-            node.getAddressAndPortFormated() +
-            "Received WordSearchMessage with content: [" +
-            message.getKeyword() +
-            "]"
-        );
-         */
         if (node.getFolder().exists() && node.getFolder().isDirectory()) {
-            sendFileSearchResultList(message);
+            FileSearchResult[] results = fileSearcher.search(message);
+            if (results.length > 0) sendObject(results);
         }
     }
 
@@ -162,14 +154,6 @@ public class SubNode extends Thread {
                     node.getAddressAndPortFormated() + "There was a problem with the GUI");
             System.exit(1);
         }
-        /*
-        System.out.println(
-            node.getAddressAndPortFormated() +
-            "Received " +
-            results.length +
-            " search results"
-        );
-         */
         node.getListener().loadListModel(results);
     }
 
@@ -178,14 +162,6 @@ public class SubNode extends Thread {
      * When receives one, adds it to the list of requests to process in the node
      */
     private void handleFileBlockRequest(FileBlockRequestMessage request) {
-        /*
-        System.out.println(
-            node.getAddressAndPortFormated() +
-            "Received FileBlockRequestMessage: " +
-            request
-        );
-         */
-
         node.addBlockRequest(request);
     }
 
@@ -323,34 +299,6 @@ public class SubNode extends Thread {
         }
     }
 
-    /*
-     * Gets the list of files to ignore
-     * The list of files to ignore is used to ignore files that are in the .gitignore file
-     */
-    private List<String> getIgnoredFileNames() {
-        List<String> ignoredFiles = new ArrayList<>();
-        File gitignore =
-                new File(this.node.getFolder().getParentFile().getParentFile(), ".gitignore");
-
-        if (gitignore.exists() && gitignore.isFile()) {
-            try (BufferedReader br = new BufferedReader(new FileReader(gitignore))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    line = line.trim();
-                    if (!line.isEmpty() && !line.startsWith("#")) {
-                        ignoredFiles.add(line);
-                    }
-                }
-            } catch (IOException e) {
-                System.out.println(
-                        node.getAddressAndPortFormated()
-                                + "Error reading .gitignore: "
-                                + e.getMessage());
-            }
-        }
-        return ignoredFiles;
-    }
-
     public void setBlockAnswerLatch(CountDownLatch latch) {
         this.blockAnswerLatch = latch;
     }
@@ -420,108 +368,6 @@ public class SubNode extends Thread {
     public int hashCode() {
         if (outgoingConnection) return Objects.hash(socket.getInetAddress(), socket.getPort());
         return super.hashCode();
-    }
-
-    /*
-     * Sends a file search result list
-     * The file search result list is used to send the files
-     * that contain the keyword in the WordSearchMessage message
-     */
-    private void sendFileSearchResultList(WordSearchMessage searchMessage) {
-        File[] files = node.getFolder().listFiles();
-        if (files == null) return;
-
-        String keyword = searchMessage.getKeyword().toLowerCase();
-        List<String> filesToIgnore = getIgnoredFileNames();
-
-        int keywordCount = countMatchingFiles(files, keyword, filesToIgnore);
-        if (keywordCount == 0) return;
-
-        FileSearchResult[] results =
-                createFileSearchResults(files, keyword, filesToIgnore, keywordCount, searchMessage);
-
-        if (results.length == 0) return;
-        /*
-        else if (results.length == 1) System.out.println(
-            node.getAddressAndPortFormated() +
-            "Sent 1 file search result [" +
-            results[0].getHash() +
-            "]"
-        );
-        else System.out.println(
-            node.getAddressAndPortFormated() +
-            "Sent " +
-            results.length +
-            " files search result for keyword: [" +
-            searchMessage.getKeyword() +
-            "]"
-        );
-        */
-        sendObject(results);
-    }
-
-    /*
-     * Counts the number of files that match the keyword
-     * and the files to ignore
-     */
-    private int countMatchingFiles(File[] files, String keyword, List<String> filesToIgnore) {
-        int count = 0;
-        for (File file : files) {
-            if (isFileMatch(file, keyword, filesToIgnore)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    /*
-     * Check if the file matches the keyword.
-     * The file matches the keyword if the file name contains the keyword
-     * and the file is not in the list of files to ignore.
-     */
-    private boolean isFileMatch(File file, String keyword, List<String> filesToIgnore) {
-        return (file.getName().toLowerCase().contains(keyword)
-                && !filesToIgnore.contains(file.getName()));
-    }
-
-    /*
-     * Creates the list of file search results that match the given keyword
-     * The file search results are used to send the files that contain the keyword
-     */
-    private FileSearchResult[] createFileSearchResults(
-            File[] files,
-            String keyword,
-            List<String> filesToIgnore,
-            int resultCount,
-            WordSearchMessage searchMessage) {
-        FileSearchResult[] results = new FileSearchResult[resultCount];
-        int counter = 0;
-
-        for (File file : files) {
-            if (isFileMatch(file, keyword, filesToIgnore)) {
-                byte[] hash = node.getHash(file.getAbsolutePath());
-                if (hash == null) {
-                    continue;
-                }
-                results[counter++] =
-                        new FileSearchResult(
-                                searchMessage,
-                                file.getName(),
-                                hash,
-                                file.length(),
-                                node.getAddress(),
-                                node.getPort());
-            }
-        }
-        if (counter == results.length) {
-            return results;
-        }
-
-        FileSearchResult[] trimmedResults = new FileSearchResult[counter];
-        for (int i = 0; i < counter; i++) {
-            trimmedResults[i] = results[i];
-        }
-        return trimmedResults;
     }
 
     public void sendFileBlockAnswer(FileBlockAnswerMessage answer) {
