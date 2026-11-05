@@ -52,8 +52,8 @@ public class Node {
         this.blocksToProcess = new ArrayList<>();
         validateId();
         initializeSenders(Config.SENDER_THREADS);
-        this.folder = createWorkingDirectory();
         this.address = initializeAddress();
+        this.folder = createWorkingDirectory();
         loadHashes();
     }
 
