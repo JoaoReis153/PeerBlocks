@@ -22,6 +22,11 @@ public class SenderAssistant extends Thread {
             } catch (InterruptedException e) {
                 System.out.println(node.getAddressAndPortFormated() + " Error in SenderAssistant");
                 e.printStackTrace();
+            } catch (RuntimeException e) {
+                System.out.println(
+                        node.getAddressAndPortFormated()
+                                + " SenderAssistant: skipped a request: "
+                                + e.getMessage());
             }
         }
     }
