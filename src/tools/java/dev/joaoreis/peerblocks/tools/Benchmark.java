@@ -210,7 +210,7 @@ public class Benchmark {
         for (int id : seederIds) {
             GUI gui = new GUI(id, false);
             writeFile(Config.WORK_FOLDER + id + File.separator + BENCH_FILE_NAME, fileContent);
-            gui.getNode().loadHashes(); // pick up the newly written file
+            gui.getNode().files().refresh(); // hash the new file before timing starts
             gui.open();
             seeders.add(gui);
         }

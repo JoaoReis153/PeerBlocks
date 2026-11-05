@@ -50,7 +50,7 @@ public final class TestNodes {
         Node seeder = startNode(new TestListener());
         File file = new File(seeder.getFolder(), fileName);
         Files.write(file.toPath(), content);
-        seeder.getHash(file.getAbsolutePath()); // hashes now and caches the result
+        seeder.files().getHash(file); // hashes now and caches the result
         return seeder;
     }
 

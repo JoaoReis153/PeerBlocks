@@ -49,7 +49,7 @@ public class FileSearchResult implements Comparable<FileSearchResult> {
     public FileSearchResult(File file, Node node) {
         this.searchMessage = null;
         this.fileName = file.getName();
-        this.hash = node.getHash(file.getAbsolutePath());
+        this.hash = node.files().getHash(file);
         this.fileSize = file.length();
         this.address = node.getAddress();
         this.port = node.getPort();

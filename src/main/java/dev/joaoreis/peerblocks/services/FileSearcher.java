@@ -27,7 +27,7 @@ public class FileSearcher {
         for (File file : files) {
             if (!file.getName().toLowerCase().contains(keyword)) continue;
 
-            byte[] hash = node.getHash(file.getAbsolutePath());
+            byte[] hash = node.files().getHash(file);
             if (hash == null) continue;
 
             results.add(

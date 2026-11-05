@@ -11,8 +11,6 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,13 +33,12 @@ public class Node {
     private final NodeListener listener;
     private final BlockRequestQueue blockRequests = new BlockRequestQueue();
     private ExecutorService senders;
-    private Map<String, byte[]> hashes;
+    private final FileIndex files;
 
     private final ExecutorService downloadTaskManagersThreadPool =
             Executors.newFixedThreadPool(Config.MAX_CONCURRENT_DOWNLOADS);
 
     public Node(int nodeId, NodeListener listener) {
-        this.hashes = new ConcurrentHashMap<>();
         this.nodeId = nodeId;
         this.port = Config.BASE_PORT + nodeId;
         this.listener = listener;
@@ -51,7 +48,8 @@ public class Node {
         initializeSenders(Config.SENDER_THREADS);
         this.address = initializeAddress();
         this.folder = createWorkingDirectory();
-        loadHashes();
+        this.files = new FileIndex(folder, getAddressAndPortFormated());
+        files.start();
     }
 
     /*
@@ -279,116 +277,6 @@ public class Node {
         }
     }
 
-    /*
-     * Loads the hashes of the files in the working directory
-     * So that there's no need to always be calculating the hashes when a file's hash is needed
-     * In this project, the hashes are used to identify the files
-     */
-    public void loadHashes() {
-        new Thread(
-                        () -> {
-                            if (folder == null || !folder.exists() || !folder.isDirectory()) return;
-
-                            checkMissingFiles();
-                            File[] files = folder.listFiles();
-                            if (files == null) return;
-
-                            for (File file : files) {
-                                try {
-                                    hashes.put(
-                                            file.getAbsolutePath(),
-                                            Utils.calculateFileHash(file.getAbsolutePath()));
-                                } catch (RuntimeException e) {
-                                    log.error(
-                                            getAddressAndPortFormated()
-                                                    + " Failed to load hash for file: "
-                                                    + file.getAbsolutePath());
-                                }
-                            }
-                        })
-                .start();
-    }
-
-    /*
-     * Checks if there are any hashes that are not in the working directory
-     * If there are, it removes them from the hash map
-     */
-    public synchronized void checkMissingFiles() {
-        File[] files = folder.listFiles();
-
-        // Create a set of existing file paths
-        Set<String> existingFilePaths = new HashSet<>();
-        if (files != null) {
-            for (File file : files) {
-                existingFilePaths.add(file.getAbsolutePath());
-            }
-        }
-
-        // Remove entries for files that no longer exist in the directory.
-        Iterator<Map.Entry<String, byte[]>> iterator = hashes.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, byte[]> entry = iterator.next();
-            if (!existingFilePaths.contains(entry.getKey())) {
-                iterator.remove();
-            }
-        }
-    }
-
-    /*
-     * Returns the hash of a file
-     * If the hash is not in the hash map, it calculates the hash and adds it to the map
-     */
-    public byte[] getHash(String filePath) {
-        if (hashes.containsKey(filePath)) {
-            return hashes.get(filePath);
-        } else {
-            try {
-                byte[] hash = Utils.calculateFileHash(filePath);
-                hashes.put(filePath, hash);
-                return hash;
-            } catch (RuntimeException e) {
-                log.error(
-                        getAddressAndPortFormated()
-                                + " Failed to calculate hash for file: "
-                                + filePath);
-                return null;
-            }
-        }
-    }
-
-    public File findFileByHash(byte[] hash) {
-        for (Map.Entry<String, byte[]> entry : hashes.entrySet()) {
-            if (Arrays.equals(entry.getValue(), hash)) {
-                File file = new File(entry.getKey());
-                if (file.isFile()) return file;
-                hashes.remove(entry.getKey(), entry.getValue()); // deleted from disk
-            }
-        }
-        return null;
-    }
-
-    /*
-     * Checks if a file with a given hash exists in the working directory
-     */
-    public boolean hasFileWithHash(byte[] hash) {
-        if (folder == null || !folder.exists() || !folder.isDirectory()) {
-            return false;
-        }
-
-        File[] files = folder.listFiles();
-        if (files == null) return false;
-
-        for (File file : files) {
-            byte[] fileHash = hashes.get(file.getAbsolutePath());
-
-            if (fileHash != null && Arrays.equals(fileHash, hash)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     // Remove a request from the list of requests to process
     public void removeDownloadProcess(byte[] hash) {
         downloadManagers.remove(hashKey(hash));
@@ -434,6 +322,14 @@ public class Node {
                         + peer.getSocket().getInetAddress().getHostAddress()
                         + "::"
                         + port);
+    }
+
+    public boolean hasFileWithHash(byte[] hash) {
+        return files.contains(hash);
+    }
+
+    public FileIndex files() {
+        return files;
     }
 
     public BlockRequestQueue blockRequests() {

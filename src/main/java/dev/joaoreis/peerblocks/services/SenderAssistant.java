@@ -1,11 +1,9 @@
 package dev.joaoreis.peerblocks.services;
 
-import dev.joaoreis.peerblocks.core.Config;
 import dev.joaoreis.peerblocks.core.Node;
 import dev.joaoreis.peerblocks.messaging.FileBlockAnswerMessage;
 import dev.joaoreis.peerblocks.messaging.FileBlockRequestMessage;
 import java.io.File;
-import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,43 +74,9 @@ public class SenderAssistant extends Thread {
     public FileBlockAnswerMessage fillRequest(FileBlockRequestMessage request) {
         byte[] hash = request.getHash();
         if (hash == null) return null;
-        File file = findFileByHash(hash);
+        File file = node.files().findFileByHash(hash);
         if (file == null) return null;
         return new FileBlockAnswerMessage(
                 node.getAddress().getHostAddress(), node.getPort(), node.getId(), request, file);
-    }
-
-    /*
-     * Finds a file with the same hash as the one requested
-     *
-     * It takes a hash and searches for the file with the same hash as the hash
-     *
-     * If the file is found, it returns the file
-     *
-     * If the file is not found, it returns null.
-     */
-    private File findFileByHash(byte[] hash) {
-        File cached = node.findFileByHash(hash);
-        if (cached != null) return cached;
-
-        File folder = new File(Config.WORK_FOLDER + node.getId() + "/");
-        if (!folder.isDirectory()) {
-            throw new IllegalArgumentException("Invalid directory path: " + folder.getPath());
-        }
-
-        File[] files = folder.listFiles();
-        if (files == null) {
-            throw new IllegalArgumentException("Unable to list files in directory");
-        }
-
-        for (File file : files) {
-            if (file.isFile()) {
-                byte[] fileHash = node.getHash(file.getAbsolutePath());
-                if (fileHash != null && Arrays.equals(fileHash, hash)) {
-                    return file;
-                }
-            }
-        }
-        return null;
     }
 }
