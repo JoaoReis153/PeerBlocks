@@ -52,7 +52,7 @@ public class SenderAssistant extends Thread {
             return;
         }
 
-        SubNode peer = node.getPeerToSend(request.getSenderAddress(), request.getSenderPort());
+        SubNode peer = node.peers().find(request.getSenderAddress(), request.getSenderPort());
         if (peer == null) {
             log.info(
                     node.getAddressAndPortFormated() + " SenderAssistant: Requesting peer is gone");
