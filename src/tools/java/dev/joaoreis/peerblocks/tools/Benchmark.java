@@ -7,6 +7,8 @@ import dev.joaoreis.peerblocks.core.Utils;
 import dev.joaoreis.peerblocks.filesearch.FileSearchResult;
 import dev.joaoreis.peerblocks.gui.GUI;
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
@@ -43,7 +45,8 @@ public class Benchmark {
 
     private static final String BENCH_FILE_NAME = "benchmark_file";
 
-    private static final AtomicInteger ID_COUNTER = new AtomicInteger(100);
+    private static final int FIRST_ID = 100;
+    private static final AtomicInteger ID_COUNTER = new AtomicInteger(FIRST_ID);
 
     // ── Construction / entry-point ─────────────────────────────────────────────
 
@@ -55,6 +58,10 @@ public class Benchmark {
     }
 
     public static void main(String[] args) throws Exception {
+        // Delete every node folder this benchmark used when it ends, even on Ctrl+C
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(Benchmark::clearUsedNodeFolders, "bench-cleanup"));
+
         int maxSeeds = 10;
         int iterations = 3;
         long fileSizeBytes = 1024L * 1024 * 100; // 100 MB default
@@ -206,6 +213,10 @@ public class Benchmark {
         }
 
         // 1 — Create seeder nodes and plant the test file in each
+        // Files left by earlier runs would be hashed and offered instead of this run's file
+        clearNodeFolder(downloaderId);
+        for (int id : seederIds) clearNodeFolder(id);
+
         List<GUI> seeders = new ArrayList<>();
         for (int id : seederIds) {
             GUI gui = new GUI(id, false);
@@ -249,16 +260,13 @@ public class Benchmark {
             benchListener.triggerDownload();
 
             // 6 — Wait for the download to finish
-            Timing timing = benchListener.awaitCompletion(DOWNLOAD_TIMEOUT_MS);
-
-            // 7 — Delete the downloaded file so the next run starts clean
-            new File(Config.WORK_FOLDER + downloaderId + File.separator + BENCH_FILE_NAME).delete();
-
-            return timing;
+            return benchListener.awaitCompletion(DOWNLOAD_TIMEOUT_MS);
         } finally {
-            // Stop this run's nodes so they don't pile up across runs
+            // Stop this run's nodes and delete their folders, so the next run starts clean
             if (downloader != null) downloader.close();
             for (GUI seeder : seeders) seeder.getNode().close();
+            clearNodeFolder(downloaderId);
+            for (int id : seederIds) clearNodeFolder(id);
         }
     }
 
@@ -367,6 +375,27 @@ public class Benchmark {
         byte[] content = new byte[(int) size];
         new Random(0xBEEF).nextBytes(content);
         return content;
+    }
+
+    private static void clearUsedNodeFolders() {
+        for (int id = FIRST_ID; id < ID_COUNTER.get(); id++) {
+            try {
+                clearNodeFolder(id);
+            } catch (IOException e) {
+                System.err.println("Could not delete " + Config.WORK_FOLDER + id);
+            }
+        }
+    }
+
+    // Deletes a node's folder and everything in it
+    private static void clearNodeFolder(int id) throws IOException {
+        Path folder = Path.of(Config.WORK_FOLDER + id);
+        if (!Files.exists(folder)) return;
+        try (var paths = Files.walk(folder)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(path);
+            }
+        }
     }
 
     private static void writeFile(String path, byte[] content) throws IOException {
