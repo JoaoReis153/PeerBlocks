@@ -74,7 +74,7 @@ public class App {
             log.error("Failed to create node.");
             System.exit(1);
         } else {
-            log.info("Node created: " + gui.getNode().getAddressAndPortFormated());
+            log.info("Node created: " + gui.getNode().getAddressAndPort());
             gui.open();
         }
 

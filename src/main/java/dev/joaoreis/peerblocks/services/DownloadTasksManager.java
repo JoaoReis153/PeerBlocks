@@ -47,9 +47,7 @@ public class DownloadTasksManager extends Thread {
         this.fileInfo = requests.get(0);
 
         log.info(
-                node.getAddressAndPortFormated()
-                        + "[taskmanager]"
-                        + "Download task manager created for file "
+                "Download task manager created for file "
                         + HexFormat.of().formatHex(fileInfo.getHash()));
         this.completedRequests = new HashSet<FileBlockRequestMessage>();
         this.numberOfDownloadsForPeer = new HashMap<>();
@@ -67,17 +65,12 @@ public class DownloadTasksManager extends Thread {
 
         // In case there are no nodes with the file, return
         if (peersWithFile.isEmpty()) {
-            log.info(node.getAddressAndPort() + "Couldn't find peers with the file");
+            log.info("Couldn't find peers with the file");
             return;
         }
         this.threadPool =
                 Executors.newFixedThreadPool(peersWithFile.size(), node.namedThreads("fetch"));
-        log.info(
-                node.getAddressAndPortFormated()
-                        + "[taskmanager]"
-                        + " "
-                        + requestList.size()
-                        + " blocks to process");
+        log.info(requestList.size() + " blocks to process");
     }
 
     @Override
@@ -104,9 +97,7 @@ public class DownloadTasksManager extends Thread {
                     .completeDownloadProgress(
                             fileInfo.getHash(), duration, new HashMap<>(numberOfDownloadsForPeer));
             log.info(
-                    node.getAddressAndPortFormated()
-                            + "[taskmanager]"
-                            + "Download finished for file "
+                    "Download finished for file "
                             + fileInfo.getFileName()
                             + " ["
                             + fileInfo.getFileSize()
@@ -117,17 +108,13 @@ public class DownloadTasksManager extends Thread {
             node.files().put(savedFile, fileInfo.getHash());
         } catch (Exception e) {
             node.getListener().finishDownloadProgress(fileInfo.getHash());
-            log.warn(
-                    node.getAddressAndPortFormated()
-                            + "Error in DownloadTasksManager: "
-                            + e.getMessage());
+            log.warn("Error in DownloadTasksManager: " + e.getMessage());
         } finally {
             if (threadPool != null) threadPool.shutdownNow();
             node.removeDownloadProcess(fileInfo.getHash());
             if (!downloadSuccessful) {
                 log.error(
-                        node.getAddressAndPortFormated()
-                                + " [taskmanager] Download failed or interrupted. Deleting partial file: "
+                        "Download failed or interrupted. Deleting partial file: "
                                 + partFile.getAbsolutePath());
             }
             if (partFile.exists()) partFile.delete();
@@ -246,10 +233,7 @@ public class DownloadTasksManager extends Thread {
             node.getListener().updateDownloadProgress(fileInfo.getHash(), completedBlocks);
             notifyAll();
         } catch (IOException e) {
-            log.error(
-                    node.getAddressAndPortFormated()
-                            + " Error writing block to disk: "
-                            + e.getMessage());
+            log.error("Error writing block to disk: " + e.getMessage());
             failureReason = "Error writing block to disk: " + e.getMessage();
             notifyAll();
         }

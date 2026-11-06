@@ -1,5 +1,6 @@
 package dev.joaoreis.peerblocks.gui;
 
+import dev.joaoreis.peerblocks.core.LogContext;
 import dev.joaoreis.peerblocks.core.Node;
 import dev.joaoreis.peerblocks.core.NodeListener;
 import dev.joaoreis.peerblocks.filesearch.FileSearchResult;
@@ -257,11 +258,9 @@ public class GUI implements NodeListener {
                         allFiles.clear();
                         String searchText = searchTextField.getText().toLowerCase();
                         node.broadcastWordSearchMessageRequest(searchText);
-                        log.info(
-                                node.getAddressAndPortFormated()
-                                        + "Search request sent for keyword: ["
-                                        + searchText
-                                        + "]");
+                        try (var logContext = LogContext.open(node.getAddressAndPort())) {
+                            log.info("Search request sent for keyword: [" + searchText + "]");
+                        }
                         lastSearchKeyword = searchText;
                     }
                 });

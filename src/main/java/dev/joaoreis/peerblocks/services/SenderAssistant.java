@@ -22,14 +22,11 @@ public class SenderAssistant extends Thread {
             try {
                 processBlockRequest();
             } catch (InterruptedException e) {
-                log.debug(node.getAddressAndPortFormated() + " SenderAssistant stopping");
+                log.debug("SenderAssistant stopping");
                 Thread.currentThread().interrupt();
                 return;
             } catch (RuntimeException e) {
-                log.warn(
-                        node.getAddressAndPortFormated()
-                                + " SenderAssistant: skipped a request: "
-                                + e.getMessage());
+                log.warn("skipped a request: " + e.getMessage());
             }
         }
     }
@@ -45,17 +42,16 @@ public class SenderAssistant extends Thread {
         FileBlockAnswerMessage answer = fillRequest(request);
         if (answer == null) return;
         if (request.getSenderAddress() == null) {
-            log.info(node.getAddressAndPortFormated() + " SenderAssistant: Null address");
+            log.info("Null address");
             return;
         } else if (request.getSenderPort() == 0) {
-            log.info(node.getAddressAndPortFormated() + " SenderAssistant: Null port");
+            log.info("Null port");
             return;
         }
 
         SubNode peer = node.peers().find(request.getSenderAddress(), request.getSenderPort());
         if (peer == null) {
-            log.info(
-                    node.getAddressAndPortFormated() + " SenderAssistant: Requesting peer is gone");
+            log.info("Requesting peer is gone");
             return;
         }
         peer.sendFileBlockAnswer(answer);

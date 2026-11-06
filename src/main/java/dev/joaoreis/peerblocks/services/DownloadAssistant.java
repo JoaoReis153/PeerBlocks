@@ -57,9 +57,7 @@ public class DownloadAssistant extends Thread {
 
         taskManager.addDownloadRequest(request);
         if (taskManager.isPeerDisconnected(peerToRequestBlock)) {
-            log.info(
-                    taskManager.getNode().getAddressAndPortFormated()
-                            + " [taskmanager] [downloadassistant] Peer disconnected, handing its block back");
+            log.info("Peer disconnected, handing its block back");
             return false;
         }
         timeoutCount++;

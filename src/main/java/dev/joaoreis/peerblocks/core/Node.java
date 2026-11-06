@@ -60,8 +60,10 @@ public class Node implements AutoCloseable {
         this.address = initializeAddress();
         this.folder = createWorkingDirectory();
         this.peers = new PeerManager(this);
-        this.files = new FileIndex(folder, getAddressAndPortFormated());
-        files.start();
+        this.files = new FileIndex(folder, getAddressAndPort());
+        try (var logContext = LogContext.open(getAddressAndPort())) {
+            files.start();
+        }
 
         this.senders = Executors.newFixedThreadPool(Config.SENDER_THREADS, namedThreads("sender"));
         this.downloadTaskManagersThreadPool =
@@ -75,8 +77,7 @@ public class Node implements AutoCloseable {
     private File createWorkingDirectory() {
         File dir = new File(Config.WORK_FOLDER + nodeId);
         if (!dir.exists() && !dir.mkdirs()) {
-            throw new RuntimeException(
-                    getAddressAndPortFormated() + "Failed to create directory: " + dir);
+            throw new RuntimeException("Failed to create directory: " + dir);
         }
         return dir;
     }
@@ -90,15 +91,18 @@ public class Node implements AutoCloseable {
     }
 
     /**
-     * Thread names like "node-8081-sender-1", so a node's threads are easy to find. Every call for
-     * the same role shares one counter, so names never repeat, even across downloads.
+     * Thread names like "node-8081-sender-1", so a node's threads are easy to find. The threads log
+     * with this node's address. Every call for the same role shares one counter, so names never
+     * repeat, even across downloads.
      */
     public ThreadFactory namedThreads(String role) {
         return threadFactories.computeIfAbsent(role, this::newThreadFactory);
     }
 
     private ThreadFactory newThreadFactory(String role) {
-        return Thread.ofPlatform().name("node-" + port + "-" + role + "-", 1).factory();
+        ThreadFactory threads =
+                Thread.ofPlatform().name("node-" + port + "-" + role + "-", 1).factory();
+        return task -> threads.newThread(LogContext.wrap(getAddressAndPort(), task));
     }
 
     /**
@@ -106,19 +110,20 @@ public class Node implements AutoCloseable {
      * calling thread.
      */
     public void startServing() {
-        if (closed.get()) return;
-        log.info(getAddressAndPortFormated() + "Awaiting connection...");
-        try (ServerSocket socket = new ServerSocket(port)) {
-            serverSocket = socket;
-            while (!closed.get()) {
-                peers.accept(socket.accept());
+        try (var logContext = LogContext.open(getAddressAndPort())) {
+            if (closed.get()) return;
+            log.info("Awaiting connection...");
+            try (ServerSocket socket = new ServerSocket(port)) {
+                serverSocket = socket;
+                while (!closed.get()) {
+                    peers.accept(socket.accept());
+                }
+            } catch (IOException e) {
+                if (closed.get()) return; // close() shut the server socket
+                throw new RuntimeException("Failed to start server: " + e.getMessage());
+            } finally {
+                serverSocket = null;
             }
-        } catch (IOException e) {
-            if (closed.get()) return; // close() shut the server socket
-            throw new RuntimeException(
-                    getAddressAndPortFormated() + "Failed to start server: " + e.getMessage());
-        } finally {
-            serverSocket = null;
         }
     }
 
@@ -129,35 +134,37 @@ public class Node implements AutoCloseable {
      */
     @Override
     public void close() {
-        if (!closed.compareAndSet(false, true)) return;
-        log.info(getAddressAndPortFormated() + "Shutting down");
+        try (var logContext = LogContext.open(getAddressAndPort())) {
+            if (!closed.compareAndSet(false, true)) return;
+            log.info("Shutting down");
 
-        ServerSocket socket = serverSocket;
-        if (socket != null) {
-            try {
-                socket.close();
-            } catch (IOException e) {
-                // already closed
-            }
-        }
-        downloadTaskManagersThreadPool.shutdownNow();
-        senders.shutdownNow();
-        List<SubNode> open = new ArrayList<>(peers.all());
-        for (SubNode peer : open) peer.close();
-        files.close();
-
-        try {
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            downloadTaskManagersThreadPool.awaitTermination(
-                    remaining(deadline), TimeUnit.NANOSECONDS);
-            senders.awaitTermination(remaining(deadline), TimeUnit.NANOSECONDS);
-            for (SubNode peer : open) {
-                if (peer != Thread.currentThread()) {
-                    TimeUnit.NANOSECONDS.timedJoin(peer, remaining(deadline));
+            ServerSocket socket = serverSocket;
+            if (socket != null) {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    // already closed
                 }
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            downloadTaskManagersThreadPool.shutdownNow();
+            senders.shutdownNow();
+            List<SubNode> open = new ArrayList<>(peers.all());
+            for (SubNode peer : open) peer.close();
+            files.close();
+
+            try {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                downloadTaskManagersThreadPool.awaitTermination(
+                        remaining(deadline), TimeUnit.NANOSECONDS);
+                senders.awaitTermination(remaining(deadline), TimeUnit.NANOSECONDS);
+                for (SubNode peer : open) {
+                    if (peer != Thread.currentThread()) {
+                        TimeUnit.NANOSECONDS.timedJoin(peer, remaining(deadline));
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -187,12 +194,16 @@ public class Node implements AutoCloseable {
 
     public void connectToNode(String targetAddress, int targetPort) {
         if (closed.get()) return;
-        peers.connect(targetAddress, targetPort);
+        try (var logContext = LogContext.open(getAddressAndPort())) {
+            peers.connect(targetAddress, targetPort);
+        }
     }
 
     /** Each peer answers with the files it has whose name contains the keyword. */
     public void broadcastWordSearchMessageRequest(String keyword) {
-        peers.broadcastSearch(keyword);
+        try (var logContext = LogContext.open(getAddressAndPort())) {
+            peers.broadcastSearch(keyword);
+        }
     }
 
     public Set<SubNode> getPeers() {
@@ -207,16 +218,18 @@ public class Node implements AutoCloseable {
 
     public void downloadFiles(List<List<FileSearchResult>> filesToDownload) {
         if (closed.get()) return;
-        for (List<FileSearchResult> file : filesToDownload) {
-            byte[] hash = file.get(0).getHash();
-            String hashKey = hashKey(hash);
-            if (downloadManagers.containsKey(hashKey)) continue; // already downloading
-            if (hasFileWithHash(hash)) continue; // already have it
+        try (var logContext = LogContext.open(getAddressAndPort())) {
+            for (List<FileSearchResult> file : filesToDownload) {
+                byte[] hash = file.get(0).getHash();
+                String hashKey = hashKey(hash);
+                if (downloadManagers.containsKey(hashKey)) continue; // already downloading
+                if (hasFileWithHash(hash)) continue; // already have it
 
-            log.info(getAddressAndPortFormated() + "Request file: " + file.get(0));
-            DownloadTasksManager downloadManager = new DownloadTasksManager(this, file);
-            downloadManagers.put(hashKey, downloadManager);
-            downloadTaskManagersThreadPool.execute(downloadManager);
+                log.info("Request file: " + file.get(0));
+                DownloadTasksManager downloadManager = new DownloadTasksManager(this, file);
+                downloadManagers.put(hashKey, downloadManager);
+                downloadTaskManagersThreadPool.execute(downloadManager);
+            }
         }
     }
 
@@ -273,10 +286,6 @@ public class Node implements AutoCloseable {
 
     public String getAddressAndPort() {
         return address.getHostAddress() + ":" + port;
-    }
-
-    public String getAddressAndPortFormated() {
-        return "[" + address.getHostAddress() + ":" + port + "]";
     }
 
     @Override

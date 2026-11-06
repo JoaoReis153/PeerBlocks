@@ -1,6 +1,7 @@
 package dev.joaoreis.peerblocks.services;
 
 import dev.joaoreis.peerblocks.core.Config;
+import dev.joaoreis.peerblocks.core.LogContext;
 import dev.joaoreis.peerblocks.core.Node;
 import dev.joaoreis.peerblocks.core.NodeListener;
 import dev.joaoreis.peerblocks.core.Utils;
@@ -45,7 +46,9 @@ public class SubNode extends Thread {
     @Override
     public void run() {
         if (in == null) return;
-        handleCommunication();
+        try (var logContext = LogContext.open(node.getAddressAndPort())) {
+            handleCommunication();
+        }
     }
 
     private void initializeStreams() {
@@ -75,13 +78,12 @@ public class SubNode extends Thread {
                 handleIncomingMessage(typeId, payload);
             }
         } catch (EOFException e) {
-            log.debug(node.getAddressAndPortFormated() + "Peer closed the connection");
+            log.debug("Peer closed the connection");
         } catch (IOException e) {
             if (running) {
-                log.warn(node.getAddressAndPortFormated() + "IO error: " + e.getMessage());
+                log.warn("IO error: " + e.getMessage());
             } else {
-                log.debug(
-                        node.getAddressAndPortFormated() + "Connection closed: " + e.getMessage());
+                log.debug("Connection closed: " + e.getMessage());
             }
         } finally {
             close();
@@ -106,10 +108,7 @@ public class SubNode extends Thread {
                 handleFileBlockAnswer(FileBlockAnswerMessage.fromBytes(payload));
                 break;
             default:
-                log.info(
-                        node.getAddressAndPortFormated()
-                                + "Received unknown message type ID: "
-                                + typeId);
+                log.info("Received unknown message type ID: " + typeId);
         }
     }
 
@@ -129,8 +128,7 @@ public class SubNode extends Thread {
                                     request.getClientPort());
             if (!accepted) {
                 log.info(
-                        node.getAddressAndPortFormated()
-                                + "Rejected incoming connection from "
+                        "Rejected incoming connection from "
                                 + request.getClientAddress().getHostAddress()
                                 + ":"
                                 + request.getClientPort());
@@ -162,9 +160,7 @@ public class SubNode extends Thread {
     private void handleFileSearchResults(FileSearchResult[] results) {
         NodeListener listener = node.getListener();
         if (listener == null) {
-            log.info(
-                    node.getAddressAndPortFormated()
-                            + "No listener to show search results, ignoring them");
+            log.info("No listener to show search results, ignoring them");
             return;
         }
         listener.loadListModel(results);
@@ -221,11 +217,7 @@ public class SubNode extends Thread {
      */
     public void sendNewConnectionRequest(InetAddress endereco, int thisPort) {
         if (out == null) {
-            log.info(
-                    node.getAddressAndPortFormated()
-                            + "OutputStream is null [invalid port: "
-                            + thisPort
-                            + "]");
+            log.info("OutputStream is null [invalid port: " + thisPort + "]");
             return;
         }
         NewConnectionRequest request = new NewConnectionRequest(endereco, thisPort);
@@ -239,9 +231,9 @@ public class SubNode extends Thread {
     public synchronized void sendObject(Object message) {
         if (out == null || socket.isClosed()) {
             if (running) {
-                log.warn(node.getAddressAndPortFormated() + "Socket closed, cannot send");
+                log.warn("Socket closed, cannot send");
             } else {
-                log.debug(node.getAddressAndPortFormated() + "Not sending, connection closed");
+                log.debug("Not sending, connection closed");
             }
             close();
             return;
@@ -276,8 +268,7 @@ public class SubNode extends Thread {
             out.flush();
 
         } catch (IOException e) {
-            log.warn(
-                    node.getAddressAndPortFormated() + "Failed to send message: " + e.getMessage());
+            log.warn("Failed to send message: " + e.getMessage());
             close();
         }
     }
@@ -295,8 +286,7 @@ public class SubNode extends Thread {
         int port =
                 Utils.isValidPort(socket.getPort()) ? socket.getPort() : originalBeforeOSchangePort;
         log.debug(
-                node.getAddressAndPortFormated()
-                        + "Thread closed for SubNode at "
+                "Thread closed for SubNode at "
                         + socket.getInetAddress().getHostAddress()
                         + ":"
                         + port);
@@ -310,10 +300,7 @@ public class SubNode extends Thread {
             if (out != null) out.close();
             if (socket != null) socket.close();
         } catch (IOException e) {
-            log.warn(
-                    node.getAddressAndPortFormated()
-                            + "Error closing resources: "
-                            + e.getMessage());
+            log.warn("Error closing resources: " + e.getMessage());
         }
     }
 
@@ -335,8 +322,7 @@ public class SubNode extends Thread {
                         ? originalBeforeOSchangePort
                         : socket.getPort();
         log.info(
-                node.getAddressAndPortFormated()
-                        + "Added new node::NodeAddress [address="
+                "Added new node::NodeAddress [address="
                         + socket.getInetAddress().getHostAddress()
                         + " port="
                         + port

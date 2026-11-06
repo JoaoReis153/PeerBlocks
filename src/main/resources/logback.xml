@@ -1,7 +1,8 @@
 <configuration>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{0} - %msg%n</pattern>
+            <!-- %X{node} is the node's address (see LogContext); left out when no node is set -->
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{0}%replace( [%X{node}]){' \[\]', ''} - %msg%n</pattern>
         </encoder>
     </appender>
 

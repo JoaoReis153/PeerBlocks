@@ -26,20 +26,23 @@ public class FileIndex {
 
     private final File folder;
     private final Path folderPath;
-    private final String logPrefix;
+    private final String node;
     private final Map<Path, byte[]> hashes = new ConcurrentHashMap<>();
     private volatile WatchService watcher;
 
-    public FileIndex(File folder, String logPrefix) {
+    public FileIndex(File folder, String node) {
         this.folder = folder;
         this.folderPath = folder.toPath().toAbsolutePath().normalize();
-        this.logPrefix = logPrefix;
+        this.node = node;
     }
 
     /** Starts watching the folder and hashes the files already in it, in the background. */
     public void start() {
         startWatcher();
-        Thread loader = new Thread(this::refresh, "file-index-load-" + folder.getName());
+        Thread loader =
+                new Thread(
+                        LogContext.wrap(node, this::refresh),
+                        "file-index-load-" + folder.getName());
         loader.setDaemon(true);
         loader.start();
     }
@@ -59,7 +62,7 @@ public class FileIndex {
             hashes.put(key, hash);
             return hash;
         } catch (RuntimeException e) {
-            log.error(logPrefix + " Failed to calculate hash for file: " + file);
+            log.error("Failed to calculate hash for file: " + file);
             return null;
         }
     }
@@ -121,11 +124,14 @@ public class FileIndex {
             service = FileSystems.getDefault().newWatchService();
             folderPath.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
         } catch (IOException e) {
-            log.warn(logPrefix + " Can't watch " + folderPath + ": " + e.getMessage());
+            log.warn("Can't watch " + folderPath + ": " + e.getMessage());
             return;
         }
         watcher = service;
-        Thread thread = new Thread(() -> watch(service), "file-index-watch-" + folder.getName());
+        Thread thread =
+                new Thread(
+                        LogContext.wrap(node, () -> watch(service)),
+                        "file-index-watch-" + folder.getName());
         thread.setDaemon(true);
         thread.start();
     }

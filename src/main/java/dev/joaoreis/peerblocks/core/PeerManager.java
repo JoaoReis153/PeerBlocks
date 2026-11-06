@@ -68,8 +68,7 @@ public class PeerManager {
                         ? peer.getSocket().getPort()
                         : peer.getOriginalBeforeOSchangePort();
         log.info(
-                node.getAddressAndPortFormated()
-                        + "Removed connection with: "
+                "Removed connection with: "
                         + peer.getSocket().getInetAddress().getHostAddress()
                         + "::"
                         + port);
@@ -91,19 +90,15 @@ public class PeerManager {
 
     private boolean isValidConnection(InetAddress targetAddress, int targetPort) {
         if (!Utils.isValidPort(targetPort)) {
-            log.warn(node.getAddressAndPortFormated() + "Failed to connect: Invalid port range");
+            log.warn("Failed to connect: Invalid port range");
             return false;
         }
         if (targetAddress.equals(node.getAddress()) && targetPort == node.getPort()) {
-            log.warn(
-                    node.getAddressAndPortFormated()
-                            + "Failed to connect: Cannot connect to itself");
+            log.warn("Failed to connect: Cannot connect to itself");
             return false;
         }
         if (isAlreadyConnected(targetAddress, targetPort)) {
-            log.warn(
-                    node.getAddressAndPortFormated()
-                            + "Failed to connect: Connection already exists");
+            log.warn("Failed to connect: Connection already exists");
             return false;
         }
         return true;
@@ -131,13 +126,10 @@ public class PeerManager {
             Thread.sleep(Config.CONNECTION_SETUP_DELAY_MS);
             handler.sendNewConnectionRequest(node.getAddress(), node.getPort());
         } catch (IOException e) {
-            log.error(
-                    node.getAddressAndPortFormated()
-                            + "Failed to establish connection: "
-                            + e.getMessage());
+            log.error("Failed to establish connection: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error(node.getAddressAndPortFormated() + "Interrupted while connecting");
+            log.error("Interrupted while connecting");
         }
     }
 }
