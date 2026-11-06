@@ -116,24 +116,24 @@ public class FileIndex {
     }
 
     private void startWatcher() {
-        WatchService watcher;
+        WatchService service;
         try {
-            watcher = FileSystems.getDefault().newWatchService();
-            folderPath.register(watcher, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
+            service = FileSystems.getDefault().newWatchService();
+            folderPath.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
         } catch (IOException e) {
             log.warn(logPrefix + " Can't watch " + folderPath + ": " + e.getMessage());
             return;
         }
-        this.watcher = watcher;
-        Thread thread = new Thread(() -> watch(watcher), "file-index-watch-" + folder.getName());
+        watcher = service;
+        Thread thread = new Thread(() -> watch(service), "file-index-watch-" + folder.getName());
         thread.setDaemon(true);
         thread.start();
     }
 
-    private void watch(WatchService watcher) {
-        try (watcher) {
+    private void watch(WatchService service) {
+        try (service) {
             while (true) {
-                WatchKey key = watcher.take();
+                WatchKey key = service.take();
                 for (WatchEvent<?> event : key.pollEvents()) {
                     if (event.kind() == OVERFLOW) {
                         hashes.clear(); // missed some events, so trust nothing
