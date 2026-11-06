@@ -216,41 +216,50 @@ public class Benchmark {
         }
         Thread.sleep(200); // let seeder servers start and hash-loading settle
 
-        // 2 — Create downloader node with a lightweight BenchmarkNodeListener
-        BenchmarkNodeListener benchListener = new BenchmarkNodeListener();
-        Node downloader = new Node(downloaderId, benchListener);
-        benchListener.setNode(downloader);
+        Node downloader = null;
+        try {
+            // 2 — Create downloader node with a lightweight BenchmarkNodeListener
+            BenchmarkNodeListener benchListener = new BenchmarkNodeListener();
+            downloader = new Node(downloaderId, benchListener);
+            benchListener.setNode(downloader);
 
-        Thread serverThread = new Thread(downloader::startServing, "bench-server-" + downloaderId);
-        serverThread.setDaemon(true);
-        serverThread.start();
-        Thread.sleep(200); // let downloader server start
+            Thread serverThread =
+                    new Thread(downloader::startServing, "bench-server-" + downloaderId);
+            serverThread.setDaemon(true);
+            serverThread.start();
+            Thread.sleep(200); // let downloader server start
 
-        // 3 — Connect every seeder → downloader
-        for (GUI seeder : seeders) {
-            seeder.getNode()
-                    .connectToNode(downloader.getAddress().getHostAddress(), downloader.getPort());
+            // 3 — Connect every seeder → downloader
+            for (GUI seeder : seeders) {
+                seeder.getNode()
+                        .connectToNode(
+                                downloader.getAddress().getHostAddress(), downloader.getPort());
+            }
+            Thread.sleep(CONNECT_SETTLE_MS);
+
+            // 4 — Broadcast search from downloader → seeders reply with FileSearchResult[]
+            downloader.broadcastWordSearchMessageRequest(BENCH_FILE_NAME);
+            Thread.sleep(SEARCH_SETTLE_MS);
+
+            // 5 — Trigger download with the results we collected
+            if (benchListener.hasNoResults()) {
+                System.out.print("[no search results — skipped]  ");
+                return null;
+            }
+            benchListener.triggerDownload();
+
+            // 6 — Wait for the download to finish
+            Timing timing = benchListener.awaitCompletion(DOWNLOAD_TIMEOUT_MS);
+
+            // 7 — Delete the downloaded file so the next run starts clean
+            new File(Config.WORK_FOLDER + downloaderId + File.separator + BENCH_FILE_NAME).delete();
+
+            return timing;
+        } finally {
+            // Stop this run's nodes so they don't pile up across runs
+            if (downloader != null) downloader.close();
+            for (GUI seeder : seeders) seeder.getNode().close();
         }
-        Thread.sleep(CONNECT_SETTLE_MS);
-
-        // 4 — Broadcast search from downloader → seeders reply with FileSearchResult[]
-        downloader.broadcastWordSearchMessageRequest(BENCH_FILE_NAME);
-        Thread.sleep(SEARCH_SETTLE_MS);
-
-        // 5 — Trigger download with the results we collected
-        if (benchListener.hasNoResults()) {
-            System.out.print("[no search results — skipped]  ");
-            return null;
-        }
-        benchListener.triggerDownload();
-
-        // 6 — Wait for the download to finish
-        Timing timing = benchListener.awaitCompletion(DOWNLOAD_TIMEOUT_MS);
-
-        // 7 — Delete the downloaded file so the next run starts clean
-        new File(Config.WORK_FOLDER + downloaderId + File.separator + BENCH_FILE_NAME).delete();
-
-        return timing;
     }
 
     // ── BenchmarkNodeListener ──────────────────────────────────────────────────

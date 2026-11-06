@@ -77,6 +77,13 @@ public class GUI implements NodeListener {
                                 + node.getPort()
                                 + " ]");
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        frame.addWindowListener(
+                new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        node.close();
+                    }
+                });
         addFrameContent();
         frame.pack();
     }

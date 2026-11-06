@@ -26,6 +26,7 @@ public final class TestNodes {
     // Each node listens on 8080 + id, so every node in the test run gets its own id
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1200);
     private static final List<Integer> USED_IDS = new ArrayList<>();
+    private static final List<Node> STARTED = new ArrayList<>();
 
     public static synchronized int reserveId() {
         int id = NEXT_ID.getAndIncrement();
@@ -37,6 +38,9 @@ public final class TestNodes {
     /** Starts a node that is already accepting connections. */
     public static Node startNode(NodeListener listener) throws InterruptedException {
         Node node = new Node(reserveId(), listener);
+        synchronized (TestNodes.class) {
+            STARTED.add(node);
+        }
         Thread server = new Thread(node::startServing, "test-node-" + node.getId());
         server.setDaemon(true);
         server.start();
@@ -111,8 +115,10 @@ public final class TestNodes {
         return bytes;
     }
 
-    /** Deletes the working folders of every node started so far. */
+    /** Stops every node started so far and deletes their working folders. */
     public static synchronized void cleanup() {
+        for (Node node : STARTED) node.close();
+        STARTED.clear();
         for (int id : USED_IDS) deleteRecursively(new File(Config.WORK_FOLDER + id));
         USED_IDS.clear();
         File[] sources = WORK_ROOT.listFiles((d, n) -> n.startsWith("sources-"));
