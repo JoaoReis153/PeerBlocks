@@ -86,4 +86,23 @@ class FileIndexTest {
 
         assertArrayEquals(hash, index.getHash(file));
     }
+
+    @Test
+    void closeStopsTheWatcherButKeepsLookupsWorking() throws Exception {
+        String watcherName = "file-index-watch-" + folder.toFile().getName();
+        index.close();
+
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (watcherAlive(watcherName) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(25);
+        }
+        assertFalse(watcherAlive(watcherName), "the watcher thread should end");
+        File file = write("f.txt", "still works");
+        assertArrayEquals(hashOf(file), index.getHash(file));
+    }
+
+    private static boolean watcherAlive(String name) {
+        return Thread.getAllStackTraces().keySet().stream()
+                .anyMatch(t -> t.isAlive() && t.getName().equals(name));
+    }
 }

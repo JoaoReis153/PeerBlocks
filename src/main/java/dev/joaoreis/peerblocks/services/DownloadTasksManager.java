@@ -70,7 +70,8 @@ public class DownloadTasksManager extends Thread {
             log.info(node.getAddressAndPort() + "Couldn't find peers with the file");
             return;
         }
-        this.threadPool = Executors.newFixedThreadPool(peersWithFile.size());
+        this.threadPool =
+                Executors.newFixedThreadPool(peersWithFile.size(), node.namedThreads("fetch"));
         log.info(
                 node.getAddressAndPortFormated()
                         + "[taskmanager]"

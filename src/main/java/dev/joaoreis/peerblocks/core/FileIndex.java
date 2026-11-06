@@ -28,6 +28,7 @@ public class FileIndex {
     private final Path folderPath;
     private final String logPrefix;
     private final Map<Path, byte[]> hashes = new ConcurrentHashMap<>();
+    private volatile WatchService watcher;
 
     public FileIndex(File folder, String logPrefix) {
         this.folder = folder;
@@ -38,7 +39,7 @@ public class FileIndex {
     /** Starts watching the folder and hashes the files already in it, in the background. */
     public void start() {
         startWatcher();
-        Thread loader = new Thread(this::refresh, "file-index-load");
+        Thread loader = new Thread(this::refresh, "file-index-load-" + folder.getName());
         loader.setDaemon(true);
         loader.start();
     }
@@ -103,6 +104,17 @@ public class FileIndex {
         return file.toPath().toAbsolutePath().normalize();
     }
 
+    /** Stops watching the folder. Lookups keep working. */
+    public void close() {
+        WatchService current = watcher;
+        if (current == null) return;
+        try {
+            current.close();
+        } catch (IOException e) {
+            // already closed
+        }
+    }
+
     private void startWatcher() {
         WatchService watcher;
         try {
@@ -112,7 +124,8 @@ public class FileIndex {
             log.warn(logPrefix + " Can't watch " + folderPath + ": " + e.getMessage());
             return;
         }
-        Thread thread = new Thread(() -> watch(watcher), "file-index-watch");
+        this.watcher = watcher;
+        Thread thread = new Thread(() -> watch(watcher), "file-index-watch-" + folder.getName());
         thread.setDaemon(true);
         thread.start();
     }

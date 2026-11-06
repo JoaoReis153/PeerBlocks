@@ -30,10 +30,11 @@ public class SubNode extends Thread {
     private DataOutputStream out;
     private DataInputStream in;
     private int originalBeforeOSchangePort;
-    private boolean running = true;
+    private volatile boolean running = true;
     private CountDownLatch blockAnswerLatch;
 
     public SubNode(Node node, Socket socket, boolean outgoingConnection) {
+        super("node-" + node.getPort() + "-peer-" + socket.getPort());
         this.node = node;
         this.fileSearcher = new FileSearcher(node);
         this.socket = socket;
@@ -74,11 +75,15 @@ public class SubNode extends Thread {
                 handleIncomingMessage(typeId, payload);
             }
         } catch (EOFException e) {
-            log.warn("End of stream reached unexpectedly.");
+            log.debug(node.getAddressAndPortFormated() + "Peer closed the connection");
         } catch (IOException e) {
-            log.warn(node.getAddressAndPortFormated() + "IO error: " + e.getMessage());
+            if (running) {
+                log.warn(node.getAddressAndPortFormated() + "IO error: " + e.getMessage());
+            } else {
+                log.debug(
+                        node.getAddressAndPortFormated() + "Connection closed: " + e.getMessage());
+            }
         } finally {
-            log.warn("Closed connection for " + node.getAddressAndPortFormated());
             close();
         }
     }
@@ -233,7 +238,11 @@ public class SubNode extends Thread {
      */
     public synchronized void sendObject(Object message) {
         if (out == null || socket.isClosed()) {
-            log.warn("Socket closed, cannot send");
+            if (running) {
+                log.warn(node.getAddressAndPortFormated() + "Socket closed, cannot send");
+            } else {
+                log.debug(node.getAddressAndPortFormated() + "Not sending, connection closed");
+            }
             close();
             return;
         }
@@ -285,7 +294,7 @@ public class SubNode extends Thread {
         closeResources();
         int port =
                 Utils.isValidPort(socket.getPort()) ? socket.getPort() : originalBeforeOSchangePort;
-        log.info(
+        log.debug(
                 node.getAddressAndPortFormated()
                         + "Thread closed for SubNode at "
                         + socket.getInetAddress().getHostAddress()

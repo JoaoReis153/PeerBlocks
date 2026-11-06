@@ -22,7 +22,7 @@ public class SenderAssistant extends Thread {
             try {
                 processBlockRequest();
             } catch (InterruptedException e) {
-                log.info(node.getAddressAndPortFormated() + " SenderAssistant stopping");
+                log.debug(node.getAddressAndPortFormated() + " SenderAssistant stopping");
                 Thread.currentThread().interrupt();
                 return;
             } catch (RuntimeException e) {
