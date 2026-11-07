@@ -267,25 +267,6 @@ public class GUI implements NodeListener {
     }
 
     /*
-     * Simulates a download button click
-     * The download button is simulated by sending a download request to all the nodes
-     * Its used to test the GUI without actually downloading files
-     */
-    public void simulateDownloadButton(List<FileSearchResult> options) {
-        List<List<FileSearchResult>> filesToDownload = new ArrayList<>();
-        for (FileSearchResult option : options) {
-            List<FileSearchResult> searchResultOfDifferentNodes = new ArrayList<FileSearchResult>();
-            for (FileSearchResult searchResult : allFiles) {
-                if (option.equals(searchResult)) {
-                    searchResultOfDifferentNodes.add(searchResult);
-                }
-            }
-            filesToDownload.add(searchResultOfDifferentNodes);
-        }
-        node.downloadFiles(filesToDownload);
-    }
-
-    /*
      * Reloads the list model
      * The list model is reloaded by sending a new word search message request
      * with the previous searched word to all the nodes
@@ -334,14 +315,6 @@ public class GUI implements NodeListener {
                         listModel.addElement(searchResult);
                     }
                 });
-    }
-
-    public ArrayList<FileSearchResult> getListModel() {
-        ArrayList<FileSearchResult> list = new ArrayList<>();
-        for (int i = 0; i < listModel.size(); i++) {
-            list.add(listModel.getElementAt(i));
-        }
-        return list;
     }
 
     @Override

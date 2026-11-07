@@ -64,13 +64,12 @@ tasks.named<JavaExec>("run") {
     workingDir = rootDir
 }
 
-// ./gradlew scenarios: starts several nodes (the first shares generated sample files)
-tasks.register<JavaExec>("scenarios") {
+// ./gradlew demo --args="1 2 3": opens connected nodes, the first shares sample files
+tasks.register<JavaExec>("demo") {
     group = "application"
-    description = "Runs a multi-node demo scenario (asks for node ids and a mode)"
+    description = "Opens a window per node id, all connected to each other"
     classpath = tools.runtimeClasspath
-    mainClass = "dev.joaoreis.peerblocks.tools.Scenarios"
-    standardInput = System.`in`
+    mainClass = "dev.joaoreis.peerblocks.tools.Demo"
     workingDir = rootDir
 }
 
