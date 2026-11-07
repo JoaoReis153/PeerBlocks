@@ -8,10 +8,12 @@ import dev.joaoreis.peerblocks.messaging.FileBlockAnswerMessage;
 import dev.joaoreis.peerblocks.messaging.FileBlockRequestMessage;
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -29,7 +31,9 @@ public class DownloadTasksManager extends Thread {
     private ExecutorService threadPool;
     private List<FileBlockRequestMessage> requestList;
     private Set<FileBlockRequestMessage> completedRequests;
+    private final Set<FileBlockRequestMessage> blocksBeingWritten = new HashSet<>();
     private final File partFile;
+    private FileChannel partChannel;
     private File savedFile;
     private Map<String, Integer> numberOfDownloadsForPeer;
     private ArrayList<SubNode> peersWithFile;
@@ -111,6 +115,7 @@ public class DownloadTasksManager extends Thread {
             log.warn("Error in DownloadTasksManager: " + e.getMessage());
         } finally {
             if (threadPool != null) threadPool.shutdownNow();
+            closePartFile();
             node.removeDownloadProcess(fileInfo.getHash());
             if (!downloadSuccessful) {
                 log.error(
@@ -131,6 +136,12 @@ public class DownloadTasksManager extends Thread {
                 throw new IOException("No peers have the file");
             }
             activeAssistants = peersWithFile.size();
+            partChannel =
+                    FileChannel.open(
+                            partFile.toPath(),
+                            StandardOpenOption.CREATE,
+                            StandardOpenOption.WRITE,
+                            StandardOpenOption.TRUNCATE_EXISTING);
         }
 
         for (SubNode peer : peersWithFile) {
@@ -140,6 +151,21 @@ public class DownloadTasksManager extends Thread {
         synchronized (this) {
             while (!allBlocksWritten() && failureReason == null) wait();
             if (failureReason != null) throw new IOException(failureReason);
+        }
+        closePartFile();
+    }
+
+    private void closePartFile() {
+        FileChannel channel;
+        synchronized (this) {
+            channel = partChannel;
+            partChannel = null;
+        }
+        if (channel == null) return;
+        try {
+            channel.close();
+        } catch (IOException e) {
+            log.warn("Couldn't close " + partFile + ": " + e.getMessage());
         }
     }
 
@@ -219,22 +245,36 @@ public class DownloadTasksManager extends Thread {
         return numberOfDownloadsForPeer;
     }
 
-    public synchronized void addDownloadAnswer(FileBlockAnswerMessage answer) {
-        if (completedRequests.contains(answer.getRequest())) {
+    public void addDownloadAnswer(FileBlockAnswerMessage answer) {
+        FileBlockRequestMessage request = answer.getRequest();
+        FileChannel channel;
+        synchronized (this) {
+            if (isOver() || partChannel == null || completedRequests.contains(request)) return;
+            if (!blocksBeingWritten.add(request)) return;
+            channel = partChannel;
+        }
+
+        try {
+            ByteBuffer data = ByteBuffer.wrap(answer.getData());
+            long position = answer.getOffset();
+            while (data.hasRemaining()) position += channel.write(data, position);
+        } catch (IOException e) {
+            synchronized (this) {
+                blocksBeingWritten.remove(request);
+                if (!isOver()) {
+                    log.error("Error writing block to disk: " + e.getMessage());
+                    failureReason = "Error writing block to disk: " + e.getMessage();
+                }
+                notifyAll();
+            }
             return;
         }
 
-        try (RandomAccessFile raf = new RandomAccessFile(partFile, "rw")) {
-            raf.seek(answer.getOffset());
-            raf.write(answer.getData());
-
-            completedRequests.add(answer.getRequest());
+        synchronized (this) {
+            blocksBeingWritten.remove(request);
+            completedRequests.add(request);
             completedBlocks++;
             node.getListener().updateDownloadProgress(fileInfo.getHash(), completedBlocks);
-            notifyAll();
-        } catch (IOException e) {
-            log.error("Error writing block to disk: " + e.getMessage());
-            failureReason = "Error writing block to disk: " + e.getMessage();
             notifyAll();
         }
     }
