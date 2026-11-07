@@ -1,44 +1,33 @@
 package dev.joaoreis.peerblocks.core;
 
-import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
-import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
-
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.ClosedWatchServiceException;
-import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.WatchEvent;
-import java.nio.file.WatchKey;
-import java.nio.file.WatchService;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Caches the hash of each file in a node's folder, and forgets it when the file changes. */
+/** Caches file hashes, rehashing a file when its size or modified time changes. */
 public class FileIndex {
 
     private static final Logger log = LoggerFactory.getLogger(FileIndex.class);
 
     private final File folder;
-    private final Path folderPath;
     private final String node;
-    private final Map<Path, byte[]> hashes = new ConcurrentHashMap<>();
-    private volatile WatchService watcher;
+    private final Map<Path, Entry> hashes = new ConcurrentHashMap<>();
 
     public FileIndex(File folder, String node) {
         this.folder = folder;
-        this.folderPath = folder.toPath().toAbsolutePath().normalize();
         this.node = node;
     }
 
-    /** Starts watching the folder and hashes the files already in it, in the background. */
+    /** Hashes the files already in the folder, in the background. */
     public void start() {
-        startWatcher();
         Thread loader =
                 new Thread(
                         LogContext.wrap(node, this::refresh),
@@ -47,19 +36,25 @@ public class FileIndex {
         loader.start();
     }
 
-    /** Hashes every file in the folder that isn't cached yet, and waits for it. */
+    /** Hashes every file whose hash isn't current, forgets deleted files, and waits for it. */
     public void refresh() {
+        hashes.keySet().removeIf(path -> !Files.isRegularFile(path));
         for (File file : sharedFiles()) getHash(file);
     }
 
     /** Returns the file's hash, computing it if needed, or null if it can't be read. */
     public byte[] getHash(File file) {
         Path key = keyOf(file);
-        byte[] cached = hashes.get(key);
-        if (cached != null) return cached;
+        BasicFileAttributes now = attributesOf(key);
+        if (now == null) {
+            hashes.remove(key);
+            return null;
+        }
+        Entry cached = hashes.get(key);
+        if (cached != null && cached.matches(now)) return cached.hash();
         try {
             byte[] hash = Utils.calculateFileHash(file.getAbsolutePath());
-            hashes.put(key, hash);
+            hashes.put(key, Entry.of(hash, now));
             return hash;
         } catch (RuntimeException e) {
             log.error("Failed to calculate hash for file: " + file);
@@ -69,21 +64,22 @@ public class FileIndex {
 
     /** Records a hash that is already known to be right, such as a verified download. */
     public void put(File file, byte[] hash) {
-        hashes.put(keyOf(file), hash);
+        Path key = keyOf(file);
+        BasicFileAttributes now = attributesOf(key);
+        if (now != null) hashes.put(key, Entry.of(hash, now));
     }
 
     /** Returns the file in the folder with this hash, or null if there is none. */
     public File findFileByHash(byte[] hash) {
-        for (Map.Entry<Path, byte[]> entry : hashes.entrySet()) {
-            if (MessageDigest.isEqual(entry.getValue(), hash)) {
-                File file = entry.getKey().toFile();
-                if (file.isFile()) return file;
-                hashes.remove(entry.getKey(), entry.getValue()); // deleted from disk
+        for (Map.Entry<Path, Entry> cached : hashes.entrySet()) {
+            if (!MessageDigest.isEqual(cached.getValue().hash(), hash)) continue;
+            if (cached.getValue().matches(attributesOf(cached.getKey()))) {
+                return cached.getKey().toFile();
             }
+            hashes.remove(cached.getKey(), cached.getValue()); // deleted or changed
         }
-        // Files the cache doesn't know about yet (new, or changed since they were hashed)
+        // Otherwise hash whatever isn't current yet (new or changed files)
         for (File file : sharedFiles()) {
-            if (hashes.containsKey(keyOf(file))) continue;
             byte[] fileHash = getHash(file);
             if (fileHash != null && MessageDigest.isEqual(fileHash, hash)) return file;
         }
@@ -107,52 +103,30 @@ public class FileIndex {
         return file.toPath().toAbsolutePath().normalize();
     }
 
-    /** Stops watching the folder. Lookups keep working. */
-    public void close() {
-        WatchService current = watcher;
-        if (current == null) return;
+    // Null if the file is gone or isn't a regular file
+    private static BasicFileAttributes attributesOf(Path path) {
         try {
-            current.close();
+            BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+            return attributes.isRegularFile() ? attributes : null;
         } catch (IOException e) {
-            // already closed
+            return null;
         }
     }
 
-    private void startWatcher() {
-        WatchService service;
-        try {
-            service = FileSystems.getDefault().newWatchService();
-            folderPath.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE);
-        } catch (IOException e) {
-            log.warn("Can't watch " + folderPath + ": " + e.getMessage());
-            return;
-        }
-        watcher = service;
-        Thread thread =
-                new Thread(
-                        LogContext.wrap(node, () -> watch(service)),
-                        "file-index-watch-" + folder.getName());
-        thread.setDaemon(true);
-        thread.start();
-    }
+    // A file's hash, and its size and modified time when it was hashed
+    private record Entry(byte[] hash, long size, long modifiedNanos) {
 
-    private void watch(WatchService service) {
-        try (service) {
-            while (true) {
-                WatchKey key = service.take();
-                for (WatchEvent<?> event : key.pollEvents()) {
-                    if (event.kind() == OVERFLOW) {
-                        hashes.clear(); // missed some events, so trust nothing
-                    } else {
-                        hashes.remove(folderPath.resolve((Path) event.context()));
-                    }
-                }
-                if (!key.reset()) return; // the folder was deleted
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (ClosedWatchServiceException | IOException e) {
-            // stopped
+        static Entry of(byte[] hash, BasicFileAttributes attributes) {
+            return new Entry(hash, attributes.size(), modifiedNanos(attributes));
+        }
+
+        // True if the file still has the size and modified time it had when hashed
+        boolean matches(BasicFileAttributes now) {
+            return now != null && now.size() == size && modifiedNanos(now) == modifiedNanos;
+        }
+
+        private static long modifiedNanos(BasicFileAttributes attributes) {
+            return attributes.lastModifiedTime().to(TimeUnit.NANOSECONDS);
         }
     }
 }

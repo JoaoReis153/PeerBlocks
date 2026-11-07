@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -11,7 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.nio.file.attribute.FileTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -68,13 +69,9 @@ class FileIndexTest {
         write("d.txt", "second version");
         byte[] newHash = hashOf(file);
 
-        // The watcher is asynchronous (and polls every few seconds on macOS)
-        long deadline = System.currentTimeMillis() + 20_000;
-        while (Arrays.equals(index.getHash(file), oldHash)
-                && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-        }
+        // The size changed, so the next lookup hashes again
         assertArrayEquals(newHash, index.getHash(file));
+        assertNull(index.findFileByHash(oldHash));
         assertEquals(file.getCanonicalFile(), index.findFileByHash(newHash).getCanonicalFile());
     }
 
@@ -88,21 +85,48 @@ class FileIndexTest {
     }
 
     @Test
-    void closeStopsTheWatcherButKeepsLookupsWorking() throws Exception {
-        String watcherName = "file-index-watch-" + folder.toFile().getName();
-        index.close();
+    void reusesTheHashOfAnUnchangedFile() throws IOException {
+        File file = write("g.txt", "stays the same");
 
-        long deadline = System.currentTimeMillis() + 5_000;
-        while (watcherAlive(watcherName) && System.currentTimeMillis() < deadline) {
-            Thread.sleep(25);
-        }
-        assertFalse(watcherAlive(watcherName), "the watcher thread should end");
-        File file = write("f.txt", "still works");
-        assertArrayEquals(hashOf(file), index.getHash(file));
+        byte[] first = index.getHash(file);
+        assertSame(first, index.getHash(file), "an unchanged file should not be hashed again");
     }
 
-    private static boolean watcherAlive(String name) {
-        return Thread.getAllStackTraces().keySet().stream()
-                .anyMatch(t -> t.isAlive() && t.getName().equals(name));
+    @Test
+    void rehashesAFileWhoseSizeChanged() throws IOException {
+        File file = write("h.txt", "short");
+        byte[] oldHash = index.getHash(file);
+
+        write("h.txt", "a much longer version");
+
+        assertArrayEquals(hashOf(file), index.getHash(file));
+        assertNull(index.findFileByHash(oldHash), "the old hash must not find the file");
+    }
+
+    @Test
+    void rehashesAFileChangedToTheSameSize() throws IOException {
+        File file = write("i.txt", "aaaa");
+        byte[] oldHash = index.getHash(file);
+        FileTime hashedAt = Files.getLastModifiedTime(file.toPath());
+
+        // Same size, different bytes: only the modified time tells them apart
+        write("i.txt", "bbbb");
+        Files.setLastModifiedTime(file.toPath(), FileTime.fromMillis(hashedAt.toMillis() + 2_000));
+        byte[] newHash = hashOf(file);
+
+        assertNull(index.findFileByHash(oldHash), "the old hash must not find the file");
+        assertEquals(file.getCanonicalFile(), index.findFileByHash(newHash).getCanonicalFile());
+    }
+
+    @Test
+    void forgetsAKnownHashWhenTheFileChanges() throws IOException {
+        File file = write("j.txt", "verified download");
+        byte[] verified = hashOf(file);
+        index.put(file, verified);
+
+        write("j.txt", "edited after the download");
+
+        assertArrayEquals(hashOf(file), index.getHash(file));
+        assertNull(index.findFileByHash(verified));
     }
 }

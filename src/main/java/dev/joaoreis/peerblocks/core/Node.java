@@ -129,8 +129,8 @@ public class Node implements AutoCloseable {
 
     /**
      * Stops the node: the server, every connection, running downloads (their .part files are
-     * deleted), the sender threads and the file watcher. Waits a few seconds for them to end.
-     * Calling it again does nothing.
+     * deleted) and the sender threads. Waits a few seconds for them to end. Calling it again does
+     * nothing.
      */
     @Override
     public void close() {
@@ -150,7 +150,6 @@ public class Node implements AutoCloseable {
             senders.shutdownNow();
             List<SubNode> open = new ArrayList<>(peers.all());
             for (SubNode peer : open) peer.close();
-            files.close();
 
             try {
                 long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
