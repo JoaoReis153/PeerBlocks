@@ -22,6 +22,8 @@ public final class Config {
     public static final String WORK_FOLDER = "nodes/node-";
     // Threads that answer block requests
     public static final int SENDER_THREADS = 5;
+    // Block requests a download keeps waiting on per peer, so the peer is never idle
+    public static final int REQUESTS_IN_FLIGHT_PER_PEER = 3;
     // Downloads that can run at the same time
     public static final int MAX_CONCURRENT_DOWNLOADS = 10;
     // Unfinished downloads end with this, and are never shared

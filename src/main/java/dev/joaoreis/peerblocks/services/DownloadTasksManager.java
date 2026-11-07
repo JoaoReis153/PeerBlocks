@@ -73,7 +73,9 @@ public class DownloadTasksManager extends Thread {
             return;
         }
         this.threadPool =
-                Executors.newFixedThreadPool(peersWithFile.size(), node.namedThreads("fetch"));
+                Executors.newFixedThreadPool(
+                        peersWithFile.size() * Config.REQUESTS_IN_FLIGHT_PER_PEER,
+                        node.namedThreads("fetch"));
         log.info(requestList.size() + " blocks to process");
     }
 
@@ -127,7 +129,8 @@ public class DownloadTasksManager extends Thread {
     }
 
     /*
-     * Starts one assistant per peer and waits until every block is written,
+     * Starts a few assistants per peer, each with one request in flight,
+     * and waits until every block is written,
      * or until the download can't finish (no peers left, disk error).
      */
     private void processDownload() throws IOException, InterruptedException {
@@ -135,7 +138,7 @@ public class DownloadTasksManager extends Thread {
             if (peersWithFile.isEmpty()) {
                 throw new IOException("No peers have the file");
             }
-            activeAssistants = peersWithFile.size();
+            activeAssistants = peersWithFile.size() * Config.REQUESTS_IN_FLIGHT_PER_PEER;
             partChannel =
                     FileChannel.open(
                             partFile.toPath(),
@@ -145,7 +148,9 @@ public class DownloadTasksManager extends Thread {
         }
 
         for (SubNode peer : peersWithFile) {
-            threadPool.execute(new DownloadAssistant(this, peer));
+            for (int i = 0; i < Config.REQUESTS_IN_FLIGHT_PER_PEER; i++) {
+                threadPool.execute(new DownloadAssistant(this, peer));
+            }
         }
 
         synchronized (this) {
