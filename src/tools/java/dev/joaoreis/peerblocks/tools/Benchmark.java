@@ -57,6 +57,17 @@ public class Benchmark {
         this.csvOutputPath = csvOutputPath;
     }
 
+    // Reads sizes like "512KB", "100MB", "1GB", or a plain number of bytes
+    static long parseSize(String text) {
+        String size = text.trim().toUpperCase();
+        long unit = 1;
+        if (size.endsWith("KB")) unit = 1024;
+        else if (size.endsWith("MB")) unit = 1024 * 1024;
+        else if (size.endsWith("GB")) unit = 1024 * 1024 * 1024;
+        if (unit > 1) size = size.substring(0, size.length() - 2);
+        return Long.parseLong(size.trim()) * unit;
+    }
+
     public static void main(String[] args) throws Exception {
         // Delete every node folder this benchmark used when it ends, even on Ctrl+C
         Runtime.getRuntime()
@@ -70,16 +81,16 @@ public class Benchmark {
         try {
             if (args.length >= 1) maxSeeds = Integer.parseInt(args[0]);
             if (args.length >= 2) iterations = Integer.parseInt(args[1]);
-            if (args.length >= 3) fileSizeBytes = Long.parseLong(args[2]);
+            if (args.length >= 3) fileSizeBytes = parseSize(args[2]);
             if (args.length >= 4) csvPath = args[3];
         } catch (NumberFormatException e) {
             System.err.println(
-                    "Usage: Benchmark [maxSeeds] [iterations] [fileSizeBytes] [csvPath]");
+                    "Usage: Benchmark [maxSeeds] [iterations] [fileSize, e.g. 100MB] [csvPath]");
             System.exit(1);
         }
 
         if (fileSizeBytes > Integer.MAX_VALUE) {
-            System.err.println("fileSizeBytes must be <= " + Integer.MAX_VALUE);
+            System.err.println("fileSize must be under 2GB");
             System.exit(1);
         }
 

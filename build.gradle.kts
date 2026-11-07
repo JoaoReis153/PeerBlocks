@@ -73,7 +73,7 @@ tasks.register<JavaExec>("demo") {
     workingDir = rootDir
 }
 
-// ./gradlew benchmark --args="[maxSeeds] [iterations] [fileSizeBytes] [outputCsv]"
+// ./gradlew benchmark --args="[maxSeeds] [iterations] [fileSize] [outputCsv]"
 tasks.register<JavaExec>("benchmark") {
     group = "application"
     description = "Measures download speed as the number of seeders grows"
