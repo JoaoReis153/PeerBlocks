@@ -364,7 +364,7 @@ public class SubNode extends Thread {
     public boolean hasConnectionWith(InetAddress address, int port) {
         int thisSocketPort =
                 Utils.isValidPort(socket.getPort()) ? socket.getPort() : originalBeforeOSchangePort;
-        return (this.socket.getLocalAddress().getHostAddress().equals(address.getHostAddress())
+        return (this.socket.getInetAddress().getHostAddress().equals(address.getHostAddress())
                 && thisSocketPort == port);
     }
 
