@@ -33,7 +33,7 @@ cleanup
 docker network rm $NETWORK >/dev/null 2>&1 || true
 docker network create $NETWORK >/dev/null
 
-echo "seeds,iteration,file_size_bytes,transfer_ms,verify_ms,total_ms,transfer_mb_per_sec,total_mb_per_sec" >"$CSV"
+echo "seeds,iteration,file_size_bytes,transfer_ms,total_ms,transfer_mb_per_sec,total_mb_per_sec" >"$CSV"
 echo "Each seeder: $RATE upload, $DELAY delay. File: $FILE_SIZE."
 
 wait_until_ready() {
@@ -66,10 +66,10 @@ for seeds in $(seq 1 "$MAX_SEEDS"); do
         if [[ $result == RESULT* ]]; then
             row=${result#RESULT }
             echo "$seeds,$iteration,$row" >>"$CSV"
-            IFS=, read -r _ transfer verify _ speed _ <<<"$row"
-            echo "$seeds seed(s) [$iteration/$ITERATIONS]: transfer $transfer ms ($speed MB/s), verify $verify ms"
+            IFS=, read -r _ transfer total speed _ <<<"$row"
+            echo "$seeds seed(s) [$iteration/$ITERATIONS]: transfer $transfer ms ($speed MB/s), total $total ms"
         else
-            echo "$seeds,$iteration,ERROR,ERROR,ERROR,ERROR,ERROR,ERROR" >>"$CSV"
+            echo "$seeds,$iteration,ERROR,ERROR,ERROR,ERROR,ERROR" >>"$CSV"
             echo "$seeds seed(s) [$iteration/$ITERATIONS]: ${result:-no result}" >&2
             echo "$output" | tail -20 >&2
         fi
