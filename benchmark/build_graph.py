@@ -10,11 +10,12 @@ benchmark_graph.png with two subplots:
 The top subplot shows a shaded min/max band plus the individual runs.
 
 Usage:
-    python build_graph.py [csv_path] [output_png]
+    python build_graph.py [csv_path] [output_png] [setup]
 
 Defaults:
     csv_path    = benchmark/benchmark_results.csv  (relative to script location)
     output_png  = benchmark/benchmark_graph.png    (relative to script location)
+    setup       = "loopback"                       (shown in the title)
 """
 
 import sys
@@ -29,6 +30,7 @@ import matplotlib.ticker as ticker
 _HERE       = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH    = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_HERE, "benchmark_results.csv")
 OUTPUT_PATH = sys.argv[2] if len(sys.argv) > 2 else os.path.join(_HERE, "benchmark_graph.png")
+SETUP       = sys.argv[3] if len(sys.argv) > 3 else "loopback"
 
 ACCENT   = "#2563EB"   # transfer mean line + dots
 BAND     = "#93C5FD"   # min/max shading
@@ -90,7 +92,7 @@ fig, (ax_tp, ax_dur) = plt.subplots(
 )
 
 fig.suptitle(
-    f"Download speed vs number of seeders  ({file_mb:.0f} MB file, loopback, "
+    f"Download speed vs number of seeders  ({file_mb:.0f} MB file, {SETUP}, "
     f"{int(iterations)} runs each)",
     fontsize=13, fontweight="bold", y=0.98
 )

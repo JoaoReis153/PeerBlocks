@@ -74,6 +74,26 @@ python benchmark/build_graph.py [csv] [png]
 
 All seeders share one machine's CPU and memory, so on loopback more seeders don't make the download faster. On a real network each seeder would add its own upload bandwidth.
 
+### Network benchmark (Docker)
+
+Runs each node in its own container and limits each seeder's upload with `tc netem`, so the network is the bottleneck instead of the machine. Needs Docker.
+
+```bash
+benchmark/network/run.sh [maxSeeds] [iterations] [fileSize] [rate] [delay] [outputCsv]
+```
+
+For example, up to 10 seeders, 3 runs each, a 100 MB file, and 100 Mbit/s with 20 ms delay per seeder (these are the defaults):
+
+```bash
+benchmark/network/run.sh 10 3 100MB 100mbit 20ms
+```
+
+Results go to `benchmark/network_results.csv`. To draw them:
+
+```bash
+python benchmark/build_graph.py benchmark/network_results.csv benchmark/network_graph.png "100 Mbit/s per seeder"
+```
+
 ## Project layout
 
 ```
@@ -86,7 +106,7 @@ src/main/java/dev/joaoreis/peerblocks/
 └── gui/           Swing windows
 src/test/          JUnit tests
 src/tools/         Demo and Benchmark launchers
-benchmark/         results, graph, and the graph script
+benchmark/         results, graphs, the graph script and network/ (Docker benchmark)
 ```
 
 Settings such as ports, block size, and timeouts are in [`Config.java`](src/main/java/dev/joaoreis/peerblocks/core/Config.java).
