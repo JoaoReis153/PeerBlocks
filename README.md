@@ -50,49 +50,16 @@ This compiles the code, checks formatting (Spotless), and runs the tests. CI run
 
 ## Benchmark
 
-Measures download speed with 1 to N seeders. A seeder is a peer that has the whole file. All nodes run in one JVM over loopback.
+Measures download speed with 1 to N seeders, on loopback and in Docker with a limited network. With 100 Mbit/s per seeder, throughput grows from about 11 MB/s with 1 seeder to about 94 MB/s with 10.
 
 ```bash
-./gradlew benchmark --args="[maxSeeds] [iterations] [fileSize] [outputCsv]"
+./gradlew benchmark
+benchmark/network/run.sh
 ```
 
-For example, up to 5 seeders, 3 runs each, with a 50 MB file:
-
-```bash
-./gradlew benchmark --args="5 3 50MB"
-```
-
-Sizes can be given as `KB`, `MB` or `GB` (under 2 GB). The defaults are 10 seeders, 3 runs each, a 100 MB file, and `benchmark/benchmark_results.csv`. To redraw the graph (needs pandas and matplotlib):
-
-```bash
-python benchmark/build_graph.py [csv] [png]
-```
+Options, results and troubleshooting are in [benchmark/README.md](benchmark/README.md).
 
 ![Download speed vs number of seeders](benchmark/benchmark_graph.png)
-
-> Measured on a MacBook Air M1 with 8 GB of RAM.
-
-All seeders share one machine's CPU and memory, so on loopback more seeders don't make the download faster. On a real network each seeder would add its own upload bandwidth.
-
-### Network benchmark (Docker)
-
-Runs each node in its own container and limits each seeder's upload with `tc netem`, so the network is the bottleneck instead of the machine. Needs Docker.
-
-```bash
-benchmark/network/run.sh [maxSeeds] [iterations] [fileSize] [rate] [delay] [outputCsv]
-```
-
-For example, up to 10 seeders, 3 runs each, a 100 MB file, and 100 Mbit/s with 20 ms delay per seeder (these are the defaults):
-
-```bash
-benchmark/network/run.sh 10 3 100MB 100mbit 20ms
-```
-
-Results go to `benchmark/network_results.csv`. To draw them:
-
-```bash
-python benchmark/build_graph.py benchmark/network_results.csv benchmark/network_graph.png "100 Mbit/s per seeder"
-```
 
 ## Project layout
 
