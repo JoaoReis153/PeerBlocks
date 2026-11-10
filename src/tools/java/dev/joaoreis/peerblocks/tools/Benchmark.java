@@ -186,7 +186,7 @@ public class Benchmark {
     }
 
     private double megabytesPerSecond(long durationMs) {
-        return (fileSizeBytes / 1_048_576.0) / (Math.max(1, durationMs) / 1_000.0);
+        return (fileSizeBytes / 1_000_000.0) / (Math.max(1, durationMs) / 1_000.0);
     }
 
     private String[] timingColumns(Timing t) {

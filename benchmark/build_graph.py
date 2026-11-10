@@ -67,7 +67,7 @@ if df.empty:
     print("ERROR: no valid rows found in the CSV.")
     sys.exit(1)
 
-file_mb = df["file_size_bytes"].iloc[0] / 1_048_576
+file_mb = df["file_size_bytes"].iloc[0] / 1_000_000
 
 # Per-seed aggregates
 agg = df.groupby("seeds").agg(
