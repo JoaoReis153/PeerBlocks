@@ -2,20 +2,8 @@
 
 Two benchmarks measure how download speed changes with the number of seeders. A seeder is a peer that has the whole file.
 
-- **Local:** all nodes in one JVM over loopback, with no network limit. Needs Java 21.
-- **Network:** each node in its own Docker container, with each seeder's upload limited by `tc netem`. Needs Java 21 and Docker.
-
-## Local benchmark
-
-```bash
-./gradlew benchmark --args="[maxSeeds] [iterations] [fileSize] [outputCsv]"
-```
-
-The defaults are 10 seeders, 3 runs each, a 100 MB file, and `benchmark/benchmark_results.csv`. Sizes can be given as `KB`, `MB` or `GB` (under 2 GB).
-
-Results: [benchmark_results.csv](benchmark_results.csv)
-
-![Local benchmark](benchmark_graph.png)
+- **Network:** each node in its own Docker container, with each seeder's upload limited by `tc netem`. The dashed line on the graph is the ideal, where speed grows in step with the seeders, so the gap to it is the real-world overhead. Needs Java 21 and Docker.
+- **Local:** all nodes in one JVM over loopback, with no network limit. It shows what the software can do on its own and runs without Docker. Needs Java 21.
 
 ## Network benchmark
 
@@ -28,6 +16,18 @@ The defaults are 10 seeders, 3 runs each, a 100 MB file, 100 Mbit/s and 20 ms de
 Results: [network_results.csv](network_results.csv)
 
 ![Network benchmark](network_graph.png)
+
+## Local benchmark
+
+```bash
+./gradlew benchmark --args="[maxSeeds] [iterations] [fileSize] [outputCsv]"
+```
+
+The defaults are 10 seeders, 3 runs each, a 100 MB file, and `benchmark/benchmark_results.csv`. Sizes can be given as `KB`, `MB` or `GB` (under 2 GB).
+
+Results: [benchmark_results.csv](benchmark_results.csv)
+
+![Local benchmark](benchmark_graph.png)
 
 ## CSV columns
 
