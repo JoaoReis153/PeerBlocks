@@ -51,7 +51,7 @@ This compiles the code, checks formatting (Spotless), and runs the tests. CI run
 
 ## Benchmark
 
-Measures download speed with 1 to N seeders, in Docker with a limited network and on loopback with no limit. With each seeder limited to 100 Mbit/s and a 20 ms delay added to simulate a real network, 10 seeders reach about 94 MB/s, roughly 80% of perfect scaling (10 × 100 Mbit/s). The dashed line in the graph scales from the 1-seeder result, so it sits a little below that.
+Measures download speed with 1 to N seeders, in Docker with a limited network and on loopback with no limit. With each seeder limited to 100 Mbit/s and a 20 ms delay added to simulate a real network, 10 seeders reach about 98 MB/s, roughly 80% of perfect scaling (10 × 100 Mbit/s). The dashed line in the graph scales from the 1-seeder result, so it sits a little below that.
 
 ```bash
 benchmark/network/run.sh
