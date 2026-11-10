@@ -17,6 +17,7 @@ A peer-to-peer file-sharing app in Java. Nodes search each other's files by name
 
 - Java 21
 - Nothing else: the Gradle wrapper is included.
+- Docker, only for the network benchmark.
 
 ## Running
 
@@ -50,16 +51,16 @@ This compiles the code, checks formatting (Spotless), and runs the tests. CI run
 
 ## Benchmark
 
-Measures download speed with 1 to N seeders, on loopback and in Docker with a limited network. With 100 Mbit/s per seeder, throughput grows from about 11 MB/s with 1 seeder to about 94 MB/s with 10.
+Measures download speed with 1 to N seeders, in Docker with a limited network and on loopback with no limit. With each seeder limited to 100 Mbit/s and a 20 ms delay added to simulate a real network, 10 seeders reach about 94 MB/s, roughly 80% of perfect scaling (10 × 100 Mbit/s). The dashed line in the graph scales from the 1-seeder result, so it sits a little below that.
 
 ```bash
-./gradlew benchmark
 benchmark/network/run.sh
+./gradlew benchmark
 ```
 
-Options, results and troubleshooting are in [benchmark/README.md](benchmark/README.md).
+Options and results are in [benchmark/README.md](benchmark/README.md).
 
-![Download speed vs number of seeders](benchmark/benchmark_graph.png)
+![Download speed vs number of seeders](benchmark/network_graph.png)
 
 ## Project layout
 
