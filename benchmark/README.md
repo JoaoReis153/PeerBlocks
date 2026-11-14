@@ -11,7 +11,7 @@ Two benchmarks measure how download speed changes with the number of seeders. A 
 benchmark/network/run.sh [maxSeeds] [iterations] [fileSize] [rate] [delay] [outputCsv]
 ```
 
-The defaults are 10 seeders, 3 runs each, a 100 MB file, 100 Mbit/s and 20 ms delay per seeder, and `benchmark/network_results.csv`.
+The defaults are 10 seeders, 3 runs each, a 105 MB file, 100 Mbit/s and 20 ms delay per seeder, and `benchmark/network_results.csv`.
 
 Results: [network_results.csv](network_results.csv)
 
@@ -23,7 +23,7 @@ Results: [network_results.csv](network_results.csv)
 ./gradlew benchmark --args="[maxSeeds] [iterations] [fileSize] [outputCsv]"
 ```
 
-The defaults are 10 seeders, 3 runs each, a 100 MB file, and `benchmark/benchmark_results.csv`. Sizes can be given as `KB`, `MB` or `GB` (under 2 GB).
+The defaults are 10 seeders, 3 runs each, a 105 MB file, and `benchmark/benchmark_results.csv`. Sizes can be given as `KB`, `MB` or `GB` (under 2 GB).
 
 Results: [benchmark_results.csv](benchmark_results.csv)
 
