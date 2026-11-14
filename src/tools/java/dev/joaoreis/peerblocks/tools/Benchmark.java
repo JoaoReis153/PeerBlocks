@@ -12,17 +12,15 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
+import java.util.function.BooleanSupplier;
 
 /**
- * Measures download speed against the number of seeders. Transfer and verification are timed apart.
+ * Measures download speed against the number of seeders. Both the transfer and the whole download
+ * are timed.
  */
 public class Benchmark {
 
-    record Timing(long transferMs, long verifyMs) {
-        long totalMs() {
-            return transferMs + verifyMs;
-        }
-    }
+    record Timing(long transferMs, long totalMs) {}
 
     // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -69,6 +67,11 @@ public class Benchmark {
     }
 
     public static void main(String[] args) throws Exception {
+        if (args.length >= 3 && (args[0].equals("seed") || args[0].equals("download"))) {
+            runNetworkNode(args);
+            return;
+        }
+
         // Delete every node folder this benchmark used when it ends, even on Ctrl+C
         Runtime.getRuntime()
                 .addShutdownHook(new Thread(Benchmark::clearUsedNodeFolders, "bench-cleanup"));
@@ -123,7 +126,6 @@ public class Benchmark {
                     "iteration",
                     "file_size_bytes",
                     "transfer_ms",
-                    "verify_ms",
                     "total_ms",
                     "transfer_mb_per_sec",
                     "total_mb_per_sec"
@@ -150,10 +152,9 @@ public class Benchmark {
                     if (timing != null) {
                         timingColumns = timingColumns(timing);
                         System.out.printf(
-                                "transfer %d ms (%.2f MB/s)  +  verify %d ms  =  %d ms%n",
+                                "transfer %d ms (%.2f MB/s)  |  total %d ms%n",
                                 timing.transferMs(),
                                 megabytesPerSecond(timing.transferMs()),
-                                timing.verifyMs(),
                                 timing.totalMs());
                         timings.add(timing);
                     } else {
@@ -185,13 +186,12 @@ public class Benchmark {
     }
 
     private double megabytesPerSecond(long durationMs) {
-        return (fileSizeBytes / 1_048_576.0) / (Math.max(1, durationMs) / 1_000.0);
+        return (fileSizeBytes / 1_000_000.0) / (Math.max(1, durationMs) / 1_000.0);
     }
 
     private String[] timingColumns(Timing t) {
         return new String[] {
             String.valueOf(t.transferMs()),
-            String.valueOf(t.verifyMs()),
             String.valueOf(t.totalMs()),
             String.format(Locale.ROOT, "%.4f", megabytesPerSecond(t.transferMs())),
             String.format(Locale.ROOT, "%.4f", megabytesPerSecond(t.totalMs()))
@@ -199,7 +199,7 @@ public class Benchmark {
     }
 
     private static String[] filled(String value) {
-        String[] columns = new String[5];
+        String[] columns = new String[4];
         Arrays.fill(columns, value);
         return columns;
     }
@@ -281,6 +281,65 @@ public class Benchmark {
         }
     }
 
+    // ── One node per container (benchmark/network/run.sh) ──────────────────────
+
+    // Runs a single node inside a Docker container, in one of two modes:
+    //   seed 1 100MB                       creates the test file and shares it until stopped
+    //   download 100 100MB seed-1:8081 ... downloads it from those seeders, then prints
+    //                                      "RESULT <csv row>" or "FAILED"
+    private static void runNetworkNode(String[] args) throws Exception {
+        long fileSize = parseSize(args[2]);
+        BenchmarkNodeListener listener = new BenchmarkNodeListener();
+        Node node = new Node(Integer.parseInt(args[1]), listener);
+        listener.setNode(node);
+
+        if (args[0].equals("seed")) {
+            writeFile(
+                    node.getFolder() + File.separator + BENCH_FILE_NAME,
+                    generateTestFile(fileSize));
+            node.files().refresh();
+            System.out.println("READY");
+            node.startServing();
+            return;
+        }
+
+        Thread server = new Thread(node::startServing);
+        server.setDaemon(true);
+        server.start();
+        int seeders = args.length - 3;
+        for (int i = 3; i < args.length; i++) {
+            String[] hostAndPort = args[i].split(":");
+            node.connectToNode(hostAndPort[0], Integer.parseInt(hostAndPort[1]));
+        }
+
+        Timing timing = null;
+        if (waitFor(() -> node.getPeers().size() >= seeders)) {
+            node.broadcastWordSearchMessageRequest(BENCH_FILE_NAME);
+            if (waitFor(() -> listener.resultCount() >= seeders)) {
+                listener.triggerDownload();
+                timing = listener.awaitCompletion(30 * 60_000);
+            }
+        }
+        Benchmark columns = new Benchmark(0, 0, fileSize, null);
+        System.out.println(
+                timing == null
+                        ? "FAILED"
+                        : "RESULT "
+                                + fileSize
+                                + ","
+                                + String.join(",", columns.timingColumns(timing)));
+        System.exit(0);
+    }
+
+    private static boolean waitFor(BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (!condition.getAsBoolean()) {
+            if (System.currentTimeMillis() > deadline) return false;
+            Thread.sleep(50);
+        }
+        return true;
+    }
+
     // ── BenchmarkNodeListener ──────────────────────────────────────────────────
 
     /**
@@ -313,6 +372,10 @@ public class Benchmark {
             return collected.isEmpty();
         }
 
+        int resultCount() {
+            return collected.size();
+        }
+
         void triggerDownload() {
             if (node == null || collected.isEmpty()) return;
 
@@ -332,9 +395,7 @@ public class Benchmark {
             if (totalMs <= 0 || transferEndNanos == 0) return null;
 
             long transferMs = (transferEndNanos - startNanos) / 1_000_000;
-            // What is left after the last block is the verification
-            long verifyMs = Math.max(0, totalMs - transferMs);
-            return new Timing(transferMs, verifyMs);
+            return new Timing(transferMs, Math.max(transferMs, totalMs));
         }
 
         // NodeListener ──────────────────────────────────────────────────────────
@@ -430,7 +491,7 @@ public class Benchmark {
     private void printSummaryTable(Map<Integer, List<Timing>> timingsPerSeed) {
         System.out.println();
         System.out.println("┌───────┬───────────────────────────┬───────────────┬─────────────┐");
-        System.out.println("│ Seeds │  Transfer avg (min–max)   │ Transfer MB/s │  Verify avg │");
+        System.out.println("│ Seeds │  Transfer avg (min–max)   │ Transfer MB/s │  Total avg  │");
         System.out.println("├───────┼───────────────────────────┼───────────────┼─────────────┤");
         for (Map.Entry<Integer, List<Timing>> e : timingsPerSeed.entrySet()) {
             List<Timing> t = e.getValue();
@@ -441,7 +502,7 @@ public class Benchmark {
             }
             LongSummaryStatistics transfer =
                     t.stream().mapToLong(Timing::transferMs).summaryStatistics();
-            double verifyAvg = t.stream().mapToLong(Timing::verifyMs).average().getAsDouble();
+            double totalAvg = t.stream().mapToLong(Timing::totalMs).average().getAsDouble();
             System.out.printf(
                     "│ %-5d │ %25s │ %13.1f │ %8.0f ms │%n",
                     e.getKey(),
@@ -449,7 +510,7 @@ public class Benchmark {
                             "%.0f ms (%d–%d)",
                             transfer.getAverage(), transfer.getMin(), transfer.getMax()),
                     megabytesPerSecond(Math.round(transfer.getAverage())),
-                    verifyAvg);
+                    totalAvg);
         }
         System.out.println("└───────┴───────────────────────────┴───────────────┴─────────────┘");
     }

@@ -81,3 +81,14 @@ tasks.register<JavaExec>("benchmark") {
     mainClass = "dev.joaoreis.peerblocks.tools.Benchmark"
     workingDir = rootDir
 }
+
+// One runnable jar with a headless node, used by the Docker network benchmark
+tasks.register<Jar>("networkNodeJar") {
+    archiveFileName = "peerblocks-node.jar"
+    destinationDirectory = layout.buildDirectory.dir("network-benchmark")
+    from(tools.runtimeClasspath.filter { it.isDirectory })
+    from({ tools.runtimeClasspath.filter { it.isFile }.map { zipTree(it) } })
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    manifest { attributes["Main-Class"] = "dev.joaoreis.peerblocks.tools.Benchmark" }
+}

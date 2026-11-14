@@ -17,6 +17,7 @@ A peer-to-peer file-sharing app in Java. Nodes search each other's files by name
 
 - Java 21
 - Nothing else: the Gradle wrapper is included.
+- Docker, only for the network benchmark.
 
 ## Running
 
@@ -50,29 +51,16 @@ This compiles the code, checks formatting (Spotless), and runs the tests. CI run
 
 ## Benchmark
 
-Measures download speed with 1 to N seeders. A seeder is a peer that has the whole file. All nodes run in one JVM over loopback.
+Measures download speed with 1 to N seeders, in Docker with a limited network and on loopback with no limit. With each seeder limited to 100 Mbit/s and a 20 ms delay added to simulate a real network, 10 seeders reach about 98 MB/s, roughly 80% of perfect scaling (10 × 100 Mbit/s). The dashed line in the graph scales from the 1-seeder result, so it sits a little below that.
 
 ```bash
-./gradlew benchmark --args="[maxSeeds] [iterations] [fileSize] [outputCsv]"
+benchmark/network/run.sh
+./gradlew benchmark
 ```
 
-For example, up to 5 seeders, 3 runs each, with a 50 MB file:
+Options and results are in [benchmark/README.md](benchmark/README.md).
 
-```bash
-./gradlew benchmark --args="5 3 50MB"
-```
-
-Sizes can be given as `KB`, `MB` or `GB` (under 2 GB). The defaults are 10 seeders, 3 runs each, a 100 MB file, and `benchmark/benchmark_results.csv`. To redraw the graph (needs pandas and matplotlib):
-
-```bash
-python benchmark/build_graph.py [csv] [png]
-```
-
-![Download speed vs number of seeders](benchmark/benchmark_graph.png)
-
-> Measured on a MacBook Air M1 with 8 GB of RAM.
-
-All seeders share one machine's CPU and memory, so on loopback more seeders don't make the download faster. On a real network each seeder would add its own upload bandwidth.
+![Download speed vs number of seeders](benchmark/network_graph.png)
 
 ## Project layout
 
@@ -86,7 +74,7 @@ src/main/java/dev/joaoreis/peerblocks/
 └── gui/           Swing windows
 src/test/          JUnit tests
 src/tools/         Demo and Benchmark launchers
-benchmark/         results, graph, and the graph script
+benchmark/         results, graphs, the graph script and network/ (Docker benchmark)
 ```
 
 Settings such as ports, block size, and timeouts are in [`Config.java`](src/main/java/dev/joaoreis/peerblocks/core/Config.java).

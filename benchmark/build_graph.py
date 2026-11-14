@@ -5,16 +5,17 @@ Reads benchmark_results.csv (produced by ./gradlew benchmark) and writes
 benchmark_graph.png with two subplots:
 
   Top   : Transfer throughput (MB/s) vs number of seeders
-  Bottom: Average download time (ms), split into transfer and hash verification
+  Bottom: Average download time (ms): total in amber, transfer in blue
 
 The top subplot shows a shaded min/max band plus the individual runs.
 
 Usage:
-    python build_graph.py [csv_path] [output_png]
+    python build_graph.py [csv_path] [output_png] [setup]
 
 Defaults:
     csv_path    = benchmark/benchmark_results.csv  (relative to script location)
     output_png  = benchmark/benchmark_graph.png    (relative to script location)
+    setup       = "loopback"                       (shown in the title)
 """
 
 import sys
@@ -29,12 +30,12 @@ import matplotlib.ticker as ticker
 _HERE       = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH    = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_HERE, "benchmark_results.csv")
 OUTPUT_PATH = sys.argv[2] if len(sys.argv) > 2 else os.path.join(_HERE, "benchmark_graph.png")
+SETUP       = sys.argv[3] if len(sys.argv) > 3 else "loopback"
 
 ACCENT   = "#2563EB"   # transfer mean line + dots
 BAND     = "#93C5FD"   # min/max shading
 SCATTER  = "#1E40AF"   # individual run dots
-VERIFY   = "#F59E0B"   # verification phase
-TOTAL    = "#6B7280"   # end-to-end line
+TOTAL    = "#F59E0B"   # total time (end-to-end line and bars)
 GRID_CLR = "#E5E7EB"
 
 
@@ -48,7 +49,7 @@ df = pd.read_csv(CSV_PATH)
 
 # Drop rows where the benchmark failed (TIMEOUT / ERROR)
 numeric_cols = [
-    "transfer_ms", "verify_ms", "total_ms",
+    "file_size_bytes", "transfer_ms", "total_ms",
     "transfer_mb_per_sec", "total_mb_per_sec",
 ]
 missing = [c for c in numeric_cols if c not in df.columns]
@@ -66,7 +67,7 @@ if df.empty:
     print("ERROR: no valid rows found in the CSV.")
     sys.exit(1)
 
-file_mb = df["file_size_bytes"].iloc[0] / 1_048_576
+file_mb = df["file_size_bytes"].iloc[0] / 1_000_000
 
 # Per-seed aggregates
 agg = df.groupby("seeds").agg(
@@ -75,7 +76,7 @@ agg = df.groupby("seeds").agg(
     throughput_max =("transfer_mb_per_sec", "max"),
     total_mean     =("total_mb_per_sec",    "mean"),
     transfer_ms    =("transfer_ms",         "mean"),
-    verify_ms      =("verify_ms",           "mean"),
+    total_ms       =("total_ms",            "mean"),
 ).reset_index()
 
 seeds      = agg["seeds"].values
@@ -90,7 +91,7 @@ fig, (ax_tp, ax_dur) = plt.subplots(
 )
 
 fig.suptitle(
-    f"Download speed vs number of seeders  ({file_mb:.0f} MB file, loopback, "
+    f"Download speed vs number of seeders  ({file_mb:.0f} MB file, {SETUP}, "
     f"{int(iterations)} runs each)",
     fontsize=13, fontweight="bold", y=0.98
 )
@@ -123,7 +124,7 @@ ax_tp.plot(
 ax_tp.plot(
     seeds, agg["total_mean"],
     color=TOTAL, linewidth=1.2, marker="o", markersize=3,
-    label="end to end, incl. verification (mean)", zorder=2
+    label="total (mean)", zorder=2
 )
 
 # Individual run dots
@@ -161,12 +162,12 @@ ax_tp.annotate(
 _style_ax(ax_dur)
 
 ax_dur.bar(
-    seeds, agg["transfer_ms"], width=0.6,
-    color=ACCENT, alpha=0.85, label="transfer", zorder=3
+    seeds, agg["total_ms"], width=0.6,
+    color=TOTAL, alpha=0.9, label="total", zorder=3
 )
 ax_dur.bar(
-    seeds, agg["verify_ms"], width=0.6, bottom=agg["transfer_ms"],
-    color=VERIFY, alpha=0.9, label="hash verification", zorder=3
+    seeds, agg["transfer_ms"], width=0.6,
+    color=ACCENT, alpha=0.9, label="transfer", zorder=4
 )
 
 ax_dur.set_ylabel("Average time (ms)", fontsize=10, color="#374151")
